@@ -32,9 +32,14 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children, adminOnly = false }) =>
         <SidebarProvider defaultOpen>
           <Sidebar Rail={<SidebarRail />} collapsible="icon">
             <SidebarHeader className="p-4">
-              <Link href="/dashboard" className="flex items-center gap-2 text-xl font-semibold text-sidebar-primary">
-                <BotMessageSquare className="h-7 w-7" />
-                <span className="group-data-[collapsible=icon]:hidden">Insight Stream</span>
+              <Link href="/dashboard" className="flex items-start gap-2 text-sidebar-primary">
+                <BotMessageSquare className="h-7 w-7 mt-1 flex-shrink-0" />
+                <div className="group-data-[collapsible=icon]:hidden">
+                  <span className="block text-xl font-semibold leading-tight">Brand Dikhega</span>
+                  <span className="block text-xs font-normal text-sidebar-foreground/70 leading-tight">
+                    powered by Insight Stream
+                  </span>
+                </div>
               </Link>
             </SidebarHeader>
             <SidebarContent>
