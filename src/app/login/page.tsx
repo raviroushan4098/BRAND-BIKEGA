@@ -41,7 +41,6 @@ export default function LoginPage() {
         });
       }
     } catch (error: any) {
-      console.error("Login page error (direct Firestore):", error);
       let description = 'An unexpected error occurred during login.';
       if (error && error.message) {
         description = `Error: ${error.message}`;
@@ -66,9 +65,9 @@ export default function LoginPage() {
           <div className="mx-auto mb-4 p-3 bg-primary text-primary-foreground rounded-full inline-block">
             <BotMessageSquare className="h-10 w-10" />
           </div>
-          <CardTitle className="text-3xl font-bold">Insight Stream</CardTitle>
+          <CardTitle className="text-3xl font-bold">Brand Dikhega</CardTitle>
           <CardDescription>
-            Access your social media analytics.
+            Access your social media analytics. <br /> Powered by Insight Stream.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -120,8 +119,9 @@ export default function LoginPage() {
             </Button>
           </form>
         </CardContent>
-        <CardFooter className="text-center text-xs text-muted-foreground">
-          <p>&copy; {new Date().getFullYear()} Insight Stream. All rights reserved.</p>
+        <CardFooter className="text-center text-xs text-muted-foreground flex-col">
+          <p>&copy; {new Date().getFullYear()} Brand Dikhega. All rights reserved.</p>
+          <p className="text-xs">Powered by Insight Stream</p>
         </CardFooter>
       </Card>
     </div>

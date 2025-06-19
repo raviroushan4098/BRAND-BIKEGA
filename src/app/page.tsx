@@ -25,7 +25,8 @@ export default function HomePage() {
     <div className="flex items-center justify-center min-h-screen bg-background">
       <div className="flex flex-col items-center">
         <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
-        <p className="text-lg text-foreground">Loading Insight Stream...</p>
+        <p className="text-lg text-foreground">Loading Brand Dikhega...</p>
+        <p className="text-sm text-muted-foreground">Powered by Insight Stream</p>
       </div>
     </div>
   );

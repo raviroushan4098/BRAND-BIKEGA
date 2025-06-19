@@ -4,7 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { AuthProvider } from '@/hooks/useAuth'; // AuthProvider for global state
 
 export const metadata: Metadata = {
-  title: 'Insight Stream',
+  title: 'Brand Dikhega',
   description: 'AI-Powered Social Media Analytics & Suggestions',
 };
 

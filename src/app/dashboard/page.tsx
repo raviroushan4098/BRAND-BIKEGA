@@ -12,9 +12,9 @@ export default function DashboardPage() {
       <div className="container mx-auto py-8 px-4 md:px-6">
         <Card className="mb-8 shadow-xl bg-gradient-to-r from-primary to-accent text-primary-foreground overflow-hidden">
           <CardHeader className="pb-2">
-            <CardTitle className="text-4xl font-bold">Welcome to Insight Stream!</CardTitle>
+            <CardTitle className="text-4xl font-bold">Welcome to Brand Dikhega!</CardTitle>
             <CardDescription className="text-lg text-primary-foreground/80">
-              Your central hub for social media analytics and content strategy.
+              Your central hub for social media analytics and content strategy, powered by Insight Stream.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col md:flex-row items-center justify-between">
@@ -22,7 +22,7 @@ export default function DashboardPage() {
               Navigate through your YouTube and Instagram performance, discover AI-powered suggestions to boost your engagement, and manage user access all in one place. Let's unlock your content's full potential!
             </p>
             <Image 
-              src="https://placehold.co/300x200.png" // Placeholder image
+              src="https://placehold.co/300x200.png" 
               alt="Data analytics illustration"
               width={300}
               height={200}
@@ -82,10 +82,6 @@ interface FeatureCardProps {
   adminOnly?: boolean;
 }
 
-// This internal component needs to be a client component to use useAuth for adminOnly check
-// Or, pass isAdmin prop from the parent (DashboardPage) if DashboardPage itself becomes client component.
-// For simplicity, we'll assume adminOnly content is just hidden if not admin, or DashboardPage could become client.
-// For now, let's not implement the adminOnly check within FeatureCard itself for this scaffold.
 const FeatureCard = ({ icon, title, description, link, linkLabel }: FeatureCardProps) => (
   <Card className="hover:shadow-lg transition-shadow duration-300">
     <CardHeader className="flex flex-row items-center gap-4 pb-2">
@@ -116,4 +112,3 @@ const QuickLinkButton = ({ href, icon, label }: QuickLinkButtonProps) => (
     </Link>
   </Button>
 );
-
