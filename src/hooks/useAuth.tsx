@@ -6,16 +6,14 @@ import {
   getCurrentUser as observeCurrentUser, 
   loginWithEmailPassword as apiLogin, 
   logoutService as apiLogout,
-  // signUpWithEmailPassword as apiSignUp // Assuming we might need a way to create users
 } from '@/lib/authService';
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { useRouter, usePathname } from 'next/navigation'; // Added usePathname
+import { useRouter, usePathname } from 'next/navigation'; 
 
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<boolean>; // Updated signature
-  // signUp: (name: string, email: string, password: string) => Promise<boolean>; // Optional: if you want a signup flow
+  login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
 }
 
@@ -25,7 +23,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
-  const pathname = usePathname(); // Get current path
+  const pathname = usePathname(); 
 
   useEffect(() => {
     setIsLoading(true);
@@ -33,40 +31,36 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUser(currentUser);
       setIsLoading(false);
       if (!currentUser && pathname !== '/login') { 
-         // router.replace('/login'); // This caused issues with initial load, handled by HomePage now
+         // router.replace('/login'); // Handled by HomePage
       } else if (currentUser && pathname === '/login') {
-        // router.replace('/dashboard'); // If logged in and on login page, redirect to dashboard
+        router.replace('/dashboard'); 
       }
     });
-    return () => unsubscribe(); // Cleanup subscription
-  }, [pathname, router]); // Add pathname and router to dependency array
+    return () => unsubscribe(); 
+  }, [pathname, router]); 
 
   const login = async (email: string, password: string): Promise<boolean> => {
-    console.log(`Attempting login for email: '${email}'`); 
-    // REMOVED: console.log(`Attempting login with password: '${password}' (REMOVE THIS LOG)`); 
+    console.log(`Attempting login for email: '${email}'`);
+    // IMPORTANT: Do not log passwords in production. This was for temporary debugging.
+    // console.log(`Attempting login with password: '${password}'`); 
     setIsLoading(true);
-    const loggedInUser = await apiLogin(email, password);
-    if (loggedInUser) {
-      setUser(loggedInUser); 
+    try {
+      const loggedInUser = await apiLogin(email, password);
+      if (loggedInUser) {
+        setUser(loggedInUser); 
+        setIsLoading(false);
+        return true;
+      }
+      // This case might occur if apiLogin returns null without throwing an error (e.g. unexpected issue)
       setIsLoading(false);
-      return true;
+      return false;
+    } catch (error) {
+      // This catch block handles errors thrown by apiLogin, such as 'auth/invalid-credential'
+      console.error("Auth Hook: Error during login attempt:", error);
+      setIsLoading(false);
+      return false; 
     }
-    setIsLoading(false);
-    return false;
   };
-
-  // Example signUp function if needed
-  // const signUp = async (name: string, email: string, password: string): Promise<boolean> => {
-  //   setIsLoading(true);
-  //   const signedUpUser = await apiSignUp(name, email, password);
-  //   if (signedUpUser) {
-  //     setUser(signedUpUser); // setUser will be called by onAuthStateChanged
-  //     setIsLoading(false);
-  //     return true;
-  //   }
-  //   setIsLoading(false);
-  //   return false;
-  // };
 
   const logout = async () => {
     setIsLoading(true);
@@ -90,4 +84,3 @@ export const useAuth = (): AuthContextType => {
   }
   return context;
 };
-

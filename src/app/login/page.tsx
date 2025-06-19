@@ -20,7 +20,7 @@ export default function LoginPage() {
   const router = useRouter();
 
   useEffect(() => {
-    if (user && !isLoading) { // Ensure not loading before redirect
+    if (user && !isLoading) { 
       router.replace('/dashboard');
     }
   }, [user, isLoading, router]);
@@ -35,11 +35,15 @@ export default function LoginPage() {
         // Router push is handled by AuthProvider effect or can be explicit here
         // router.push('/dashboard'); 
       } else {
-        toast({ title: 'Login Failed', description: 'Invalid email or password. Please try again.', variant: 'destructive' });
+        toast({ 
+          title: 'Login Failed', 
+          description: 'Invalid email or password. Please double-check your credentials and ensure the user exists in Firebase Authentication.', 
+          variant: 'destructive' 
+        });
       }
     } catch (error) {
       console.error("Login page error:", error);
-      toast({ title: 'Error', description: 'An unexpected error occurred during login.', variant: 'destructive' });
+      toast({ title: 'Error', description: 'An unexpected error occurred during login. Check console for details.', variant: 'destructive' });
     }
     setIsSubmitting(false);
   };
@@ -105,12 +109,6 @@ export default function LoginPage() {
             <Button type="submit" className="w-full text-lg py-6" disabled={isSubmitting || isLoading}>
               {isSubmitting ? 'Logging In...' : 'Login'}
             </Button>
-            {/* Add forgot password link if needed */}
-            {/* <div className="text-center">
-              <Button variant="link" size="sm" asChild>
-                <Link href="/forgot-password">Forgot Password?</Link>
-              </Button>
-            </div> */}
           </form>
         </CardContent>
         <CardFooter className="text-center text-xs text-muted-foreground">
