@@ -5,8 +5,9 @@ import type { ChannelAnalyticsReportOutput, YouTubeVideoForReport } from '@/ai/f
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Loader2, AlertTriangle, TrendingUp, TrendingDown, Lightbulb, ListChecks, BarChartBig, Star, YoutubeIcon } from 'lucide-react';
+import { Loader2, AlertTriangle, TrendingUp, TrendingDown, Lightbulb, ListChecks, BarChartBig, Star, YoutubeIcon, Download } from 'lucide-react';
 import Link from 'next/link';
+import { cn } from '@/lib/utils';
 
 interface ChannelAnalyticsReportDisplayProps {
   report: ChannelAnalyticsReportOutput | null;
@@ -30,6 +31,66 @@ const SectionCard: React.FC<{ title: string; icon: React.ElementType; children: 
 );
 
 const ChannelAnalyticsReportDisplay: React.FC<ChannelAnalyticsReportDisplayProps> = ({ report, isLoading, error, onRegenerate }) => {
+  
+  const handleDownloadReport = () => {
+    if (!report) return;
+
+    let markdownContent = `# ${report.reportTitle || "Channel Analytics Report"}\n\n`;
+    markdownContent += `## Overall Performance Summary\n${report.overallPerformanceSummary}\n\n`;
+
+    markdownContent += `## Key Observations\n`;
+    if (report.keyObservations.length > 0) {
+      report.keyObservations.forEach(obs => markdownContent += `- ${obs}\n`);
+    } else {
+      markdownContent += `No specific key observations noted.\n`;
+    }
+    markdownContent += `\n`;
+
+    markdownContent += `## Top Performing Videos\n`;
+    if (report.topPerformingVideos.length > 0) {
+      report.topPerformingVideos.forEach(video => {
+        markdownContent += `### [${video.title}](https://www.youtube.com/watch?v=${video.id})\n`;
+        markdownContent += `- Views: ${video.views.toLocaleString()}\n`;
+        markdownContent += `- Likes: ${video.likes.toLocaleString()}\n`;
+        markdownContent += `- Comments: ${video.comments.toLocaleString()}\n`;
+        if (video.reason) {
+          markdownContent += `- Reason: ${video.reason}\n`;
+        }
+        markdownContent += `\n`;
+      });
+    } else {
+      markdownContent += `Could not identify distinct top-performing videos.\n\n`;
+    }
+
+    markdownContent += `## Areas for Improvement\n`;
+    if (report.areasForImprovement.length > 0) {
+      report.areasForImprovement.forEach(area => markdownContent += `- ${area}\n`);
+    } else {
+      markdownContent += `No specific areas for improvement highlighted.\n`;
+    }
+    markdownContent += `\n`;
+
+    markdownContent += `## Actionable Suggestions\n`;
+    if (report.actionableSuggestions.length > 0) {
+      report.actionableSuggestions.forEach(suggestion => markdownContent += `- ${suggestion}\n`);
+    } else {
+      markdownContent += `No specific actionable suggestions provided.\n`;
+    }
+    markdownContent += `\n`;
+
+    const blob = new Blob([markdownContent], { type: 'text/markdown;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    const reportTitleForFile = report.reportTitle ? report.reportTitle.replace(/[^a-z0-9_]/gi, '_').toLowerCase() : 'channel_analytics_report';
+    link.setAttribute("href", url);
+    link.setAttribute("download", `${reportTitleForFile}.md`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center p-8 min-h-[400px] text-center">
@@ -125,11 +186,15 @@ const ChannelAnalyticsReportDisplay: React.FC<ChannelAnalyticsReportDisplayProps
           ) : <p>No specific actionable suggestions provided by the AI at this time.</p>}
         </SectionCard>
       </div>
-      {onRegenerate && (
-        <CardFooter className="mt-4 justify-end">
+      <CardFooter className="mt-4 justify-end gap-2">
+          <Button onClick={handleDownloadReport} variant="outline">
+            <Download className="mr-2 h-4 w-4" />
+            Download Report
+          </Button>
+          {onRegenerate && (
             <Button onClick={onRegenerate} variant="outline">Regenerate Report</Button>
-        </CardFooter>
-      )}
+          )}
+      </CardFooter>
     </div>
   );
 };
