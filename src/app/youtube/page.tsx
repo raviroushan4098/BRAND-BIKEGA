@@ -258,7 +258,8 @@ export default function YouTubeManagementPage() {
     } catch (error: any) {
       console.error("Error refreshing feed:", error);
       const errorMessage = error.message || "An unknown error occurred during refresh.";
-      setFetchError(`Refresh failed: ${errorMessage}`);
+      const fetchErrorMsg = "Refresh failed: " + errorMessage;
+      setFetchError(fetchErrorMsg);
       toast({ title: "Refresh Error", description: errorMessage, variant: "destructive" });
     } finally {
       setIsRefreshing(false);
@@ -368,18 +369,12 @@ export default function YouTubeManagementPage() {
 
   return (
     <AppLayout>
-      <div className="container mx-auto py-8 px-4 md:px-6">
+      <div className="container mx-auto py-8 px-4 md:px:6">
         <Card className="mb-8 shadow-lg">
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <BarChart3 className="h-8 w-8 text-primary" />
-                <CardTitle className="text-3xl font-bold">YouTube Management</CardTitle>
-              </div>
-              <Button onClick={handleRefreshFeed} disabled={isRefreshing || isLoadingVideos} variant="outline" size="lg">
-                <RefreshCw className={`mr-2 h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} />
-                {isRefreshing ? 'Refreshing...' : 'Refresh Feed'}
-              </Button>
+            <div className="flex items-center gap-3">
+              <BarChart3 className="h-8 w-8 text-primary" />
+              <CardTitle className="text-3xl font-bold">YouTube Management</CardTitle>
             </div>
             <CardDescription>
               {user?.role === 'admin' 
@@ -492,8 +487,16 @@ export default function YouTubeManagementPage() {
         {(!isLoadingVideos || isRefreshing) && summaryStats && (
           <Card className="mb-6 shadow-md">
             <CardHeader>
-              <CardTitle className="text-xl font-semibold">Performance Overview</CardTitle>
-              <CardDescription> Summary for {user?.role === 'admin' && selectedUserIdForAdmin ? `${usersForAdminSelect.find(u=>u.id === selectedUserIdForAdmin)?.name || 'the selected user'}'s` : "your"} {summaryStats.totalVideos} video(s) { (dateRange.from || dateRange.to) ? "(filtered)" : ""}. </CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-xl font-semibold">Performance Overview</CardTitle>
+                  <CardDescription> Summary for {user?.role === 'admin' && selectedUserIdForAdmin ? `${usersForAdminSelect.find(u=>u.id === selectedUserIdForAdmin)?.name || 'the selected user'}'s` : "your"} {summaryStats.totalVideos} video(s) { (dateRange.from || dateRange.to) ? "(filtered)" : ""}. </CardDescription>
+                </div>
+                <Button onClick={handleRefreshFeed} disabled={isRefreshing || isLoadingVideos} variant="outline" size="sm">
+                  <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                  {isRefreshing ? 'Refreshing...' : 'Refresh Feed'}
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-4">
               <StatCard icon={ListVideo} label="Total Videos" value={summaryStats.totalVideos} />
@@ -534,3 +537,4 @@ export default function YouTubeManagementPage() {
     </AppLayout>
   );
 }
+
