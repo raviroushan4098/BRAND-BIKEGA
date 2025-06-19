@@ -2,13 +2,13 @@
 "use client";
 
 import type { User } from '@/lib/authService';
-import { 
-  getCurrentUser as observeCurrentUser, 
-  loginWithEmailPassword as apiLogin, 
+import {
+  loginWithEmailPassword as apiLogin,
   logoutService as apiLogout,
+  // getCurrentUser is not used in the same way, effect handles local storage
 } from '@/lib/authService';
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { useRouter, usePathname } from 'next/navigation'; 
+import { useRouter, usePathname } from 'next/navigation';
 
 interface AuthContextType {
   user: User | null;
@@ -23,50 +23,59 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
-  const pathname = usePathname(); 
+  const pathname = usePathname();
 
   useEffect(() => {
     setIsLoading(true);
-    const unsubscribe = observeCurrentUser((currentUser) => {
-      setUser(currentUser);
-      setIsLoading(false);
-      if (!currentUser && pathname !== '/login') { 
-         // router.replace('/login'); // Handled by HomePage
-      } else if (currentUser && pathname === '/login') {
-        router.replace('/dashboard'); 
+    const storedUser = localStorage.getItem('currentUser');
+    if (storedUser) {
+      try {
+        setUser(JSON.parse(storedUser));
+      } catch (e) {
+        localStorage.removeItem('currentUser');
+        setUser(null);
       }
-    });
-    return () => unsubscribe(); 
-  }, [pathname, router]); 
+    }
+    setIsLoading(false);
+  }, []); // Runs once on mount
+
+  useEffect(() => {
+    // This effect handles redirection based on user state and current path
+    if (!isLoading) {
+      if (!user && pathname !== '/login') {
+        // router.replace('/login'); // Handled by HomePage or ProtectedRoute
+      } else if (user && pathname === '/login') {
+        router.replace('/dashboard');
+      }
+    }
+  }, [user, isLoading, pathname, router]);
 
   const login = async (email: string, password: string): Promise<boolean> => {
-    console.log(`Attempting login for email: '${email}'`);
-    // IMPORTANT: Do not log passwords in production. This was for temporary debugging.
-    // console.log(`Attempting login with password: '${password}'`); 
+    console.log(`Attempting login for email: '${email}' directly against Firestore (INSECURE).`);
     setIsLoading(true);
     try {
       const loggedInUser = await apiLogin(email, password);
       if (loggedInUser) {
-        setUser(loggedInUser); 
+        setUser(loggedInUser);
+        localStorage.setItem('currentUser', JSON.stringify(loggedInUser));
         setIsLoading(false);
+        router.push('/dashboard'); // Navigate after successful login
         return true;
       }
-      // This case might occur if apiLogin returns null without throwing an error (e.g. unexpected issue)
       setIsLoading(false);
       return false;
     } catch (error) {
-      // This catch block handles errors thrown by apiLogin, such as 'auth/invalid-credential'
       console.error("Auth Hook: Error during login attempt:", error);
       setIsLoading(false);
-      return false; 
+      throw error; // Re-throw for the login page to handle
     }
   };
 
   const logout = async () => {
     setIsLoading(true);
-    await apiLogout();
-    setUser(null); 
-    router.push('/login'); 
+    await apiLogout(); // Clears localStorage
+    setUser(null);
+    router.push('/login');
     setIsLoading(false);
   };
 

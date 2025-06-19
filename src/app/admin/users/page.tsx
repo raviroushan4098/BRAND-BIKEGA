@@ -7,15 +7,16 @@ import UserTable from '@/components/admin/UserTable';
 import CreateUserForm from '@/components/admin/CreateUserForm';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { PlusCircle, Users, RefreshCw } from 'lucide-react';
+import { PlusCircle, Users, RefreshCw, AlertTriangle } from 'lucide-react';
 import type { User } from '@/lib/authService';
-import { 
-  getAllUsers as apiGetAllUsers, 
-  adminCreateUser as apiAdminCreateUser, 
+import {
+  getAllUsers as apiGetAllUsers,
+  adminCreateUser as apiAdminCreateUser,
   adminUpdateUser as apiAdminUpdateUser,
   adminDeleteUser as apiAdminDeleteUser
 } from '@/lib/authService';
 import { toast } from '@/hooks/use-toast';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export default function UserManagementPage() {
   const [users, setUsers] = useState<User[]>([]);
@@ -49,43 +50,64 @@ export default function UserManagementPage() {
   };
 
   const handleDeleteUser = async (userId: string) => {
-    if (!window.confirm("Are you sure you want to delete this user's profile? This action removes their data from Firestore but does NOT delete their authentication record or prevent login if their auth account still exists.")) {
+    if (users.find(u => u.id === userId && u.email === "davbhagalpur52@gmail.com")) {
+      toast({ title: "Action Restricted", description: "The demo admin user cannot be deleted.", variant: "destructive" });
+      return;
+    }
+    if (!window.confirm("Are you sure you want to delete this user's profile from Firestore?")) {
       return;
     }
     setIsLoading(true);
     const success = await apiAdminDeleteUser(userId);
     if (success) {
       setUsers(prevUsers => prevUsers.filter(user => user.id !== userId));
-      toast({ title: "User Profile Deleted", description: `User profile with ID ${userId} has been removed from Firestore. Auth record may persist.` });
+      toast({ title: "User Profile Deleted", description: `User profile with ID ${userId} has been removed from Firestore.` });
     } else {
       toast({ title: "Error", description: "Failed to delete user profile.", variant: "destructive" });
     }
     setIsLoading(false);
   };
 
-  const handleSubmitUser = async (userData: Omit<User, 'id' | 'lastLogin'> & { password?: string }, currentUserId?: string) => {
+  const handleSubmitUser = async (userData: Omit<User, 'id' | 'lastLogin'>, currentUserId?: string) => {
     setIsLoading(true);
     if (currentUserId) {
       // Update user profile in Firestore
-      const { password, email, ...updateData } = userData; // Exclude password and email from direct update data
-      const success = await apiAdminUpdateUser(currentUserId, updateData);
+      // Ensure sensitive fields like email of specific users are not changed
+      const originalUser = users.find(u => u.id === currentUserId);
+      if (originalUser && originalUser.email === "davbhagalpur52@gmail.com" && userData.email !== "davbhagalpur52@gmail.com") {
+          toast({ title: "Error", description: "Cannot change email of the demo admin user.", variant: "destructive" });
+          setIsLoading(false);
+          setIsFormOpen(false);
+          return;
+      }
+      
+      const updatePayload = { ...userData };
+      // Retain original email if it's an edit action, as email is not supposed to be editable via this form.
+      if (originalUser) {
+        updatePayload.email = originalUser.email;
+      }
+
+
+      const success = await apiAdminUpdateUser(currentUserId, updatePayload);
       if (success) {
-        await fetchUsers(); 
+        await fetchUsers();
         toast({ title: "User Profile Updated", description: `${userData.name}'s profile details have been updated in Firestore.` });
       } else {
         toast({ title: "Error", description: "Failed to update user profile.", variant: "destructive" });
       }
     } else {
-      // Create user profile in Firestore (userData includes password if provided by form, but it's not used for Auth creation by apiAdminCreateUser)
-      if (!userData.password) { // Password field in form is for admin reference or future backend use
-         toast({ title: "Password Field Note", description: "Password field in form is noted, but auth record needs separate admin creation.", variant: "default" });
-      }
-      const newUserProfile = await apiAdminCreateUser(userData as Omit<User, 'id' | 'lastLogin'> & {password: string});
-      if (newUserProfile) {
-        await fetchUsers(); 
-        toast({ title: "User Profile Created", description: `${newUserProfile.name}'s profile has been added to Firestore. Ensure their auth account is also set up by an admin for login.` });
-      } else {
-        toast({ title: "Error", description: "Failed to create user profile in Firestore.", variant: "destructive" });
+      // Create user profile in Firestore (userData includes INSECURE plaintext password)
+      try {
+        const newUserProfile = await apiAdminCreateUser(userData as Omit<User, 'id' | 'lastLogin'>);
+        if (newUserProfile) {
+          await fetchUsers();
+          toast({ title: "User Profile Created (INSECURE)", description: `${newUserProfile.name}'s profile (with plaintext password) has been added to Firestore.` });
+        } else {
+          // apiAdminCreateUser throws an error if email exists, or returns null on other failures
+          toast({ title: "Error", description: "Failed to create user profile in Firestore. The email might already exist.", variant: "destructive" });
+        }
+      } catch (error: any) {
+         toast({ title: "Error Creating User", description: error.message || "Failed to create user profile.", variant: "destructive" });
       }
     }
     setIsLoading(false);
@@ -112,10 +134,18 @@ export default function UserManagementPage() {
               </div>
             </div>
             <CardDescription>
-              Manage user roles and tracked social media channels. User profiles are stored in Firestore.
+              Manage user profiles stored in Firestore.
               <br/>
-              <span className="text-destructive text-xs font-semibold">Important:</span> User authentication records (login credentials) are managed separately in Firebase Authentication. Creating a user profile here does not automatically create their login account. Deleting a user profile here removes their data from Firestore but does not delete their authentication record.
+              <span className="text-destructive text-xs font-semibold">WARNING:</span> User login is now direct via Firestore, storing passwords in plaintext. This is highly insecure.
             </CardDescription>
+             <Alert variant="destructive" className="mt-4">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle className="font-semibold">CRITICAL SECURITY RISK</AlertTitle>
+                <AlertDescription>
+                The authentication system has been modified to use direct Firestore login.
+                This means passwords are being stored and checked in plaintext, which is extremely insecure and should never be used in production.
+                </AlertDescription>
+            </Alert>
           </CardHeader>
         </Card>
 

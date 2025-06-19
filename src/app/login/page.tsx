@@ -32,30 +32,28 @@ export default function LoginPage() {
       const success = await login(email, password);
       if (success) {
         toast({ title: 'Login Successful', description: 'Welcome back!' });
-        // Router push/replace is handled by AuthProvider or useEffect above
+        // Navigation is handled by useAuth or useEffect above
       } else {
-        // This 'else' block might not be hit if login function always throws on failure.
-        // Specific error handling is in the catch block.
         toast({
           title: 'Login Failed',
-          description: 'Please check your credentials. Ensure the user exists in Firebase Authentication (Users tab) and the password is correct.',
+          description: 'Invalid email or password. Please check your credentials. This app uses a direct Firestore login (INSECURE).',
           variant: 'destructive'
         });
       }
     } catch (error: any) {
-      console.error("Login page error:", error.code, error.message);
-      let description = 'An unexpected error occurred during login.';
-      if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
-        description = 'Invalid email or password. Please ensure the account exists in Firebase Authentication (Users tab in Firebase Console) and your credentials are correct.';
-      } else if (error.code) {
-        description = `Error: ${error.message} (Code: ${error.code})`;
+      console.error("Login page error:", error);
+      let description = 'An unexpected error occurred during login. This app uses a direct Firestore login (INSECURE).';
+      if (error && error.message && error.message.includes('Email already exists')) {
+        description = 'This email is already registered. Please try logging in or use a different email.';
+      } else if (error && error.message) {
+        description = `Error: ${error.message}`;
       }
       toast({ title: 'Login Failed', description, variant: 'destructive' });
     }
     setIsSubmitting(false);
   };
 
-  if (isLoading || (user && !isLoading)) { // Prevent flash of login page if user is already loaded
+  if (isLoading || (user && !isLoading)) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
         <p>Loading...</p>
@@ -71,7 +69,13 @@ export default function LoginPage() {
             <BotMessageSquare className="h-10 w-10" />
           </div>
           <CardTitle className="text-3xl font-bold">Insight Stream</CardTitle>
-          <CardDescription>Securely access your social media analytics.</CardDescription>
+          <CardDescription>
+            Access your social media analytics.
+            <br />
+            <span className="text-destructive text-xs font-semibold">
+              WARNING: This app uses an insecure direct Firestore login method.
+            </span>
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-6">

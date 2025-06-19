@@ -1,113 +1,77 @@
 
-import { auth, db } from './firebase';
+import { db } from './firebase';
 import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged,
-  type User as FirebaseUser
-} from 'firebase/auth';
-import { doc, getDoc, setDoc, collection, getDocs, deleteDoc, updateDoc } from 'firebase/firestore';
+  doc, getDoc, setDoc, collection, getDocs, deleteDoc, updateDoc, query, where, limit
+} from 'firebase/firestore';
 
-// User type for the application, extending with Firebase UID
+// User type for the application
 export interface User {
-  id: string; // Firebase UID
+  id: string; // Firestore document ID
   email: string;
+  password: string; // Storing plaintext passwords - HIGHLY INSECURE
   role: 'user' | 'admin';
   name: string;
   lastLogin: string; // ISO string
   trackedChannels?: { youtube?: string[]; instagram?: string[] };
 }
 
-// Store user profile in Firestore
-const storeUserProfile = async (firebaseUser: FirebaseUser, additionalData: Partial<User> = {}) => {
-  const userRef = doc(db, 'users', firebaseUser.uid);
-  const data: Partial<User> = {
-    id: firebaseUser.uid,
-    email: firebaseUser.email || '',
-    name: additionalData.name || firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Anonymous',
-    role: additionalData.role || 'user', // Default role
-    lastLogin: firebaseUser.metadata.lastSignInTime || new Date().toISOString(),
-    trackedChannels: additionalData.trackedChannels || { youtube: [], instagram: [] },
-  };
-  await setDoc(userRef, data, { merge: true });
-  return data as User;
-};
+// Fetch user profile from Firestore by email
+const fetchUserProfileByEmail = async (email: string): Promise<User | null> => {
+  const usersRef = collection(db, 'users');
+  const q = query(usersRef, where("email", "==", email), limit(1));
+  const querySnapshot = await getDocs(q);
 
-export const fetchUserProfile = async (firebaseUser: FirebaseUser): Promise<User | null> => {
-  const userRef = doc(db, 'users', firebaseUser.uid);
-  const userSnap = await getDoc(userRef);
-  if (userSnap.exists()) {
-    // User profile exists, update lastLogin time
-    const userData = userSnap.data() as User;
-    const lastLoginTime = firebaseUser.metadata.lastSignInTime || new Date().toISOString();
-    if (userData.lastLogin !== lastLoginTime) {
-      await setDoc(userRef, { lastLogin: lastLoginTime }, { merge: true });
-      return { ...userData, lastLogin: lastLoginTime };
-    }
-    return userData;
-  } else {
-    // If profile doesn't exist in Firestore (e.g., first login for an Auth user), create a basic one.
-    console.warn(`User profile for ${firebaseUser.uid} not found in Firestore. Creating one.`);
-    return storeUserProfile(firebaseUser, { name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] });
-  }
-};
-
-
-export const loginWithEmailPassword = async (email: string, password: string): Promise<User | null> => {
-  try {
-    const userCredential = await signInWithEmailAndPassword(auth, email, password);
-    const firebaseUser = userCredential.user;
-    
-    // After successful Firebase Authentication, fetch/create the user's profile from Firestore.
-    // This ensures user data (like role, name etc.) is available in the app.
-    const userProfile = await fetchUserProfile(firebaseUser);
-    
-    if (userProfile) {
-      return { ...userProfile, lastLogin: firebaseUser.metadata.lastSignInTime || new Date().toISOString() };
-    }
-    // This case should ideally not be hit if fetchUserProfile always creates a profile.
-    // However, returning null if profile somehow isn't available.
-    console.error("Login successful but user profile could not be fetched or created in Firestore.");
-    return null; 
-  } catch (error) {
-    console.error("Error logging in with email/password:", error);
-    throw error; 
-  }
-};
-
-export const signUpWithEmailPassword = async (name: string, email: string, password: string, role: 'user' | 'admin' = 'user', trackedChannels?: { youtube?: string[]; instagram?: string[] }): Promise<User | null> => {
-  try {
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    const firebaseUser = userCredential.user;
-    // Store additional profile information in Firestore
-    return storeUserProfile(firebaseUser, { name, email, role, trackedChannels });
-  } catch (error) {
-    console.error("Error signing up with email/password:", error);
+  if (querySnapshot.empty) {
     return null;
   }
+  const userDoc = querySnapshot.docs[0];
+  return { id: userDoc.id, ...userDoc.data() } as User;
 };
 
+
+export const loginWithEmailPassword = async (email: string, passwordInput: string): Promise<User | null> => {
+  try {
+    const userProfile = await fetchUserProfileByEmail(email);
+
+    if (userProfile && userProfile.password === passwordInput) { // Plaintext password comparison - HIGHLY INSECURE
+      // Update lastLogin time
+      const userRef = doc(db, 'users', userProfile.id);
+      const lastLoginTime = new Date().toISOString();
+      await updateDoc(userRef, { lastLogin: lastLoginTime });
+      return { ...userProfile, lastLogin: lastLoginTime };
+    }
+    console.error("Login failed: Invalid email or password.");
+    return null;
+  } catch (error) {
+    console.error("Error logging in with email/password:", error);
+    throw error;
+  }
+};
+
+// This function is no longer for Firebase Auth based current user,
+// but will be used by useAuth hook to check localStorage
 export const getCurrentUser = (callback: (user: User | null) => void): (() => void) => {
-  // Observes Firebase Auth state changes
-  return onAuthStateChanged(auth, async (firebaseUser) => {
-    if (firebaseUser) {
-      // If a Firebase user is authenticated, fetch their profile from Firestore
-      const userProfile = await fetchUserProfile(firebaseUser);
-      callback(userProfile);
-    } else {
-      // No Firebase user authenticated
+  // Placeholder for custom session management if needed beyond useAuth's localStorage
+  // For this direct Firestore login, session is managed in useAuth.tsx
+  const userString = localStorage.getItem('currentUser');
+  if (userString) {
+    try {
+      const user: User = JSON.parse(userString);
+      callback(user);
+    } catch (e) {
+      localStorage.removeItem('currentUser');
       callback(null);
     }
-  });
+  } else {
+    callback(null);
+  }
+  // Return an empty unsubscribe function as there's no persistent listener like onAuthStateChanged
+  return () => {};
 };
 
 export const logoutService = async (): Promise<void> => {
-  try {
-    await signOut(auth);
-  } catch (error) {
-    console.error("Error logging out:", error);
-  }
+  // No Firebase sign out needed. Session is cleared in useAuth.tsx
+  localStorage.removeItem('currentUser');
 };
 
 
@@ -127,20 +91,27 @@ export const getAllUsers = async (): Promise<User[]> => {
   }
 };
 
-export const adminCreateUser = async (userData: Omit<User, 'id' | 'lastLogin' > & {password?: string}): Promise<User | null> => {
+export const adminCreateUser = async (userData: Omit<User, 'id' | 'lastLogin'>): Promise<User | null> => {
   try {
-    const newUserId = doc(collection(db, 'users')).id; // Generate a new unique ID for Firestore document
-    
+    // Check if user with this email already exists
+    const existingUser = await fetchUserProfileByEmail(userData.email);
+    if (existingUser) {
+      console.error('Error creating user: Email already exists.');
+      throw new Error('Email already exists.');
+    }
+
+    const newUserId = doc(collection(db, 'users')).id;
     const newUserProfile: User = {
-      id: newUserId, 
+      id: newUserId,
       email: userData.email,
+      password: userData.password, // Storing plaintext password - HIGHLY INSECURE
       name: userData.name,
       role: userData.role,
-      lastLogin: new Date(0).toISOString(), // Indicates never logged in or placeholder
+      lastLogin: new Date(0).toISOString(), // Indicates never logged in
       trackedChannels: userData.trackedChannels || { youtube: [], instagram: [] },
     };
     await setDoc(doc(db, 'users', newUserId), newUserProfile);
-    console.warn(`[ADMIN ACTION] Created user PROFILE in Firestore for ${userData.email} (ID: ${newUserId}). IMPORTANT: This does NOT create a Firebase Authentication account. The user cannot log in until an auth account is created manually in the Firebase Console.`);
+    console.warn(`[ADMIN ACTION] Created user PROFILE in Firestore for ${userData.email} (ID: ${newUserId}). Password stored in plaintext.`);
     return newUserProfile;
   } catch (error) {
     console.error('Error creating user profile in Firestore (admin):', error);
@@ -151,7 +122,17 @@ export const adminCreateUser = async (userData: Omit<User, 'id' | 'lastLogin' > 
 export const adminUpdateUser = async (userId: string, userData: Partial<Omit<User, 'id' | 'email'>>): Promise<boolean> => {
   try {
     const userRef = doc(db, 'users', userId);
-    await updateDoc(userRef, userData);
+    // If password is part of userData and is an empty string, don't update it (means user didn't want to change it)
+    // If password is provided and not empty, update it.
+    const updateData = { ...userData };
+    if ('password' in updateData && updateData.password === '') {
+      delete updateData.password; // Don't update password if it's an empty string from the form
+    } else if ('password' in updateData && updateData.password) {
+      // Password will be updated (plaintext)
+      console.warn(`[ADMIN ACTION] Updating password for user ${userId} in plaintext.`);
+    }
+
+    await updateDoc(userRef, updateData);
     return true;
   } catch (error) {
     console.error("Error updating user profile (admin):", error);
@@ -163,7 +144,7 @@ export const adminDeleteUser = async (userId: string): Promise<boolean> => {
   try {
     const userRef = doc(db, 'users', userId);
     await deleteDoc(userRef);
-    console.warn(`[ADMIN ACTION] User profile ${userId} deleted from Firestore. IMPORTANT: This does NOT delete their Firebase Authentication record.`);
+    console.warn(`[ADMIN ACTION] User profile ${userId} deleted from Firestore.`);
     return true;
   } catch (error) {
     console.error("Error deleting user profile (admin):", error);
@@ -171,13 +152,13 @@ export const adminDeleteUser = async (userId: string): Promise<boolean> => {
   }
 };
 
-// Deprecated OTP functions
+// Deprecated OTP functions - kept for completeness but non-functional
 export const requestOtp = async (email: string): Promise<boolean> => {
-  console.warn("requestOtp is deprecated. Use email/password authentication.");
+  console.warn("requestOtp is deprecated. Login is direct via Firestore (insecure).");
   return false;
 };
 
 export const verifyOtp = async (email: string, otp: string): Promise<User | null> => {
-  console.warn("verifyOtp is deprecated. Use email/password authentication.");
+  console.warn("verifyOtp is deprecated. Login is direct via Firestore (insecure).");
   return null;
 };

@@ -20,12 +20,14 @@ const userFormSchemaBase = z.object({
   role: z.enum(['user', 'admin']),
 });
 
+// Schema for creating a new user, password is required
 const createUserSchema = userFormSchemaBase.extend({
-  password: z.string().min(6, "Password (for admin reference) must be at least 6 characters."),
+  password: z.string().min(6, "Password must be at least 6 characters."),
 });
 
+// Schema for editing an existing user, password is optional (only set if a new one is provided)
 const editUserSchema = userFormSchemaBase.extend({
-  password: z.string().optional(), // Password is not editable for existing users via this form in terms of Auth.
+  password: z.string().min(6, "New password must be at least 6 characters.").optional().or(z.literal('')),
 });
 
 type UserFormValues = z.infer<typeof createUserSchema> | z.infer<typeof editUserSchema>;
@@ -33,7 +35,7 @@ type UserFormValues = z.infer<typeof createUserSchema> | z.infer<typeof editUser
 interface CreateUserFormProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmitUser: (data: Omit<User, 'id' | 'lastLogin'> & { password?: string }, currentUserId?: string) => void;
+  onSubmitUser: (data: Omit<User, 'id' | 'lastLogin'>, currentUserId?: string) => void;
   initialData?: User | null;
 }
 
@@ -57,7 +59,7 @@ const CreateUserForm: React.FC<CreateUserFormProps> = ({ isOpen, onOpenChange, o
           name: initialData.name,
           email: initialData.email,
           role: initialData.role,
-          password: '', // Password field is cleared for edits, as it's reference for manual Auth setup.
+          password: '', // Clear password field for edits; only set if new password entered
         });
       } else {
         form.reset({
@@ -70,20 +72,26 @@ const CreateUserForm: React.FC<CreateUserFormProps> = ({ isOpen, onOpenChange, o
     }
   }, [initialData, form, isOpen]);
 
-
   const handleSubmit: SubmitHandler<UserFormValues> = (data) => {
-    const userDataToSubmit: Omit<User, 'id' | 'lastLogin'> & { password?: string } = {
-        name: data.name,
-        email: data.email,
-        role: data.role,
-        trackedChannels: initialData?.trackedChannels || { youtube: [], instagram: [] },
+    const userDataToSubmit: Omit<User, 'id' | 'lastLogin'> = {
+      name: data.name,
+      email: data.email,
+      // Password WILL be stored in plaintext in Firestore. This is HIGHLY INSECURE.
+      password: data.password || (isEditing ? initialData?.password : ''), // Keep old password if not changed during edit, or set new if provided
+      role: data.role,
+      trackedChannels: initialData?.trackedChannels || { youtube: [], instagram: [] },
     };
 
-    // For new users, the password from the form is for admin reference.
-    // It's NOT used by this client-side function to create an Auth account.
-    if (!isEditing && data.password && data.password.length > 0) {
-        userDataToSubmit.password = data.password;
+    // Ensure password is included for new users
+    if (!isEditing && !userDataToSubmit.password) {
+        // This case should ideally be caught by zod validation (min 6 chars for createUserSchema)
+        form.setError("password", { type: "manual", message: "Password is required for new users." });
+        return;
     }
+     if (isEditing && !data.password && initialData) { // If editing and password field is empty, retain old password
+      userDataToSubmit.password = initialData.password;
+    }
+
 
     onSubmitUser(userDataToSubmit, initialData?.id);
     onOpenChange(false);
@@ -96,22 +104,22 @@ const CreateUserForm: React.FC<CreateUserFormProps> = ({ isOpen, onOpenChange, o
           <DialogTitle>{initialData ? 'Edit User Profile' : 'Create New User Profile'}</DialogTitle>
           <DialogDescription>
             {isEditing
-              ? "Update the user's profile details below. Email cannot be changed here. Profile changes are saved to Firestore."
-              : "Fill in the details to create a new user profile in Firestore. This profile is for data storage only."
+              ? "Update the user's profile details below. Email cannot be changed here."
+              : "Fill in the details to create a new user profile. The password entered will be stored directly."
             }
+             <br/>
+            <span className="text-destructive font-semibold">SECURITY WARNING:</span> Passwords will be stored in plaintext in Firestore. This is highly insecure.
           </DialogDescription>
         </DialogHeader>
-        {!isEditing && (
-          <Alert variant="default" className="mt-4 bg-primary/10 border-primary/50">
-            <AlertTriangle className="h-4 w-4 text-primary" />
-            <AlertTitle className="text-primary font-semibold">Important: Login Account Setup Required</AlertTitle>
-            <AlertDescription className="text-primary/90">
-              Creating a profile here **only saves data to Firestore for app use (name, role, etc.)**.
-              <br/>For the user to actually log in, an admin **must also manually create an account for them in Firebase Authentication** (Build &gt; Authentication &gt; Users tab in your Firebase Console) using the same email and a password.
-              The password field below is for your reference when doing so.
+        <Alert variant="destructive" className="mt-4">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle className="font-semibold">CRITICAL SECURITY RISK</AlertTitle>
+            <AlertDescription>
+              This form will store passwords directly in your database in plaintext.
+              This is extremely insecure and should NEVER be done in a real application.
+              This modified authentication system bypasses Firebase's secure password handling.
             </AlertDescription>
-          </Alert>
-        )}
+        </Alert>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4 py-4">
             <FormField
@@ -134,52 +142,37 @@ const CreateUserForm: React.FC<CreateUserFormProps> = ({ isOpen, onOpenChange, o
                 <FormItem>
                   <FormLabel>Email Address</FormLabel>
                   <FormControl>
-                    <Input type="email" placeholder="user@example.com" {...field} readOnly={isEditing} />
+                    <Input type="email" placeholder="user@example.com" {...field} readOnly={isEditing && initialData?.email === "davbhagalpur52@gmail.com"} />
                   </FormControl>
-                  {isEditing && <FormDescription>Email cannot be changed for existing user profiles via this form.</FormDescription>}
+                  {isEditing && initialData?.email === "davbhagalpur52@gmail.com" && <FormDescription>The admin demo email cannot be changed.</FormDescription>}
+                  {isEditing && initialData?.email !== "davbhagalpur52@gmail.com" && <FormDescription>Email cannot be changed for existing user profiles.</FormDescription>}
                   <FormMessage />
                 </FormItem>
               )}
             />
-            {!isEditing && (
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Password (for Admin Reference Only)</FormLabel>
-                    <FormControl>
-                      <Input type="password" placeholder="Enter password for reference" {...field} />
-                    </FormControl>
-                    <FormDescription>Min 6 characters. This password is **for your reference only** when you manually create the user's login account in Firebase Authentication. This app will NOT use this password to create the login account.</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
-             {isEditing && ( // Optional: Show a note if editing about password not being handled here.
-                <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Set/Update Password (via Firebase Console)</FormLabel>
-                     <FormControl>
-                      <Input type="password" placeholder="Password managed in Firebase Auth" {...field} disabled={true} value="********" />
-                    </FormControl>
-                    <FormDescription>User passwords must be managed directly in Firebase Authentication by an administrator.</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
+            <FormField
+              control={form.control}
+              name="password"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{isEditing ? 'New Password (optional)' : 'Password'}</FormLabel>
+                  <FormControl>
+                    <Input type="password" placeholder={isEditing ? "Leave blank to keep current" : "Enter password"} {...field} />
+                  </FormControl>
+                  <FormDescription>
+                    {isEditing ? "Enter a new password to change it. Min 6 characters." : "Min 6 characters. This password will be stored in plaintext (INSECURE)."}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
             <FormField
               control={form.control}
               name="role"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Role</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isEditing && initialData?.email === "davbhagalpur52@gmail.com" && initialData.role === "admin"}>
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Select a role" />
@@ -190,6 +183,7 @@ const CreateUserForm: React.FC<CreateUserFormProps> = ({ isOpen, onOpenChange, o
                       <SelectItem value="admin">Admin</SelectItem>
                     </SelectContent>
                   </Select>
+                  {isEditing && initialData?.email === "davbhagalpur52@gmail.com" && initialData.role === "admin" && <FormDescription>The admin demo role cannot be changed.</FormDescription>}
                   <FormMessage />
                 </FormItem>
               )}
@@ -198,7 +192,7 @@ const CreateUserForm: React.FC<CreateUserFormProps> = ({ isOpen, onOpenChange, o
               <DialogClose asChild>
                 <Button type="button" variant="outline">Cancel</Button>
               </DialogClose>
-              <Button type="submit">{initialData ? 'Save Profile Changes to Firestore' : 'Create User Profile in Firestore'}</Button>
+              <Button type="submit">{initialData ? 'Save Profile Changes' : 'Create User Profile'}</Button>
             </DialogFooter>
           </form>
         </Form>
