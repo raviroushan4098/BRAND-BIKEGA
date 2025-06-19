@@ -6,7 +6,7 @@ import {
   getCurrentUser as observeCurrentUser, 
   loginWithEmailPassword as apiLogin, 
   logoutService as apiLogout,
-  signUpWithEmailPassword as apiSignUp // Assuming we might need a way to create users
+  // signUpWithEmailPassword as apiSignUp // Assuming we might need a way to create users
 } from '@/lib/authService';
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useRouter, usePathname } from 'next/navigation'; // Added usePathname
@@ -32,7 +32,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const unsubscribe = observeCurrentUser((currentUser) => {
       setUser(currentUser);
       setIsLoading(false);
-      if (!currentUser && pathname !== '/login') { // Redirect if not logged in and not on login page
+      if (!currentUser && pathname !== '/login') { 
          // router.replace('/login'); // This caused issues with initial load, handled by HomePage now
       } else if (currentUser && pathname === '/login') {
         // router.replace('/dashboard'); // If logged in and on login page, redirect to dashboard
@@ -42,11 +42,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [pathname, router]); // Add pathname and router to dependency array
 
   const login = async (email: string, password: string): Promise<boolean> => {
-    console.log(`Attempting login for email: '${email}'`); // Added for debugging
+    console.log(`Attempting login for email: '${email}'`); 
+    // IMPORTANT: Logging passwords is a security risk. Remove this after debugging.
+    console.log(`Attempting login with password: '${password}' (REMOVE THIS LOG)`); 
     setIsLoading(true);
     const loggedInUser = await apiLogin(email, password);
     if (loggedInUser) {
-      setUser(loggedInUser); // setUser will be called by onAuthStateChanged, but this can make UI update faster
+      setUser(loggedInUser); 
       setIsLoading(false);
       return true;
     }
@@ -70,8 +72,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const logout = async () => {
     setIsLoading(true);
     await apiLogout();
-    setUser(null); // setUser will be called by onAuthStateChanged
-    router.push('/login'); // Explicitly redirect to login after logout
+    setUser(null); 
+    router.push('/login'); 
     setIsLoading(false);
   };
 
