@@ -16,8 +16,6 @@ const userFormSchemaBase = z.object({
   name: z.string().min(2, "Name must be at least 2 characters."),
   email: z.string().email("Invalid email address."),
   role: z.enum(['user', 'admin']),
-  youtubeChannels: z.string().optional().transform(val => val ? val.split(',').map(s => s.trim()).filter(s => s) : []),
-  instagramProfiles: z.string().optional().transform(val => val ? val.split(',').map(s => s.trim()).filter(s => s) : []),
 });
 
 const createUserSchema = userFormSchemaBase.extend({
@@ -46,8 +44,6 @@ const CreateUserForm: React.FC<CreateUserFormProps> = ({ isOpen, onOpenChange, o
       name: '',
       email: '',
       role: 'user',
-      youtubeChannels: [],
-      instagramProfiles: [],
       password: '', 
     },
   });
@@ -59,8 +55,6 @@ const CreateUserForm: React.FC<CreateUserFormProps> = ({ isOpen, onOpenChange, o
           name: initialData.name,
           email: initialData.email,
           role: initialData.role,
-          youtubeChannels: initialData.trackedChannels?.youtube || [],
-          instagramProfiles: initialData.trackedChannels?.instagram || [],
           password: '', 
         });
       } else {
@@ -68,8 +62,6 @@ const CreateUserForm: React.FC<CreateUserFormProps> = ({ isOpen, onOpenChange, o
           name: '',
           email: '',
           role: 'user',
-          youtubeChannels: [],
-          instagramProfiles: [],
           password: '',
         });
       }
@@ -80,12 +72,9 @@ const CreateUserForm: React.FC<CreateUserFormProps> = ({ isOpen, onOpenChange, o
   const handleSubmit: SubmitHandler<UserFormValues> = (data) => {
     const userDataToSubmit: Omit<User, 'id' | 'lastLogin'> & { password?: string } = {
         name: data.name,
-        email: data.email, // Email is collected
+        email: data.email, 
         role: data.role,
-        trackedChannels: {
-            youtube: data.youtubeChannels as string[] | undefined, 
-            instagram: data.instagramProfiles as string[] | undefined, 
-        }
+        trackedChannels: initialData?.trackedChannels || { youtube: [], instagram: [] },
     };
     
     if (data.password && data.password.length > 0) {
@@ -170,44 +159,6 @@ const CreateUserForm: React.FC<CreateUserFormProps> = ({ isOpen, onOpenChange, o
                       <SelectItem value="admin">Admin</SelectItem>
                     </SelectContent>
                   </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-             <FormField
-              control={form.control}
-              name="youtubeChannels"
-              render={({ field: { onChange, value, ...rest } }) => (
-                <FormItem>
-                  <FormLabel>YouTube Channel IDs</FormLabel>
-                  <FormControl>
-                    <Input 
-                      placeholder="UC...,UC..." 
-                      value={Array.isArray(value) ? value.join(',') : ''}
-                      onChange={(e) => onChange(e.target.value.split(',').map(s => s.trim()).filter(s => s))}
-                      {...rest}
-                    />
-                  </FormControl>
-                  <FormDescription>Comma-separated list of YouTube Channel IDs.</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="instagramProfiles"
-              render={({ field: { onChange, value, ...rest } }) => (
-                <FormItem>
-                  <FormLabel>Instagram Profile Names</FormLabel>
-                  <FormControl>
-                     <Input 
-                      placeholder="profile1,profile2" 
-                      value={Array.isArray(value) ? value.join(',') : ''}
-                      onChange={(e) => onChange(e.target.value.split(',').map(s => s.trim()).filter(s => s))}
-                      {...rest}
-                    />
-                  </FormControl>
-                  <FormDescription>Comma-separated list of Instagram profile names.</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
