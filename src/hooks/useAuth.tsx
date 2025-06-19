@@ -26,15 +26,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const pathname = usePathname();
 
   useEffect(() => {
+    // Attempt to load user from localStorage on initial mount
     setIsLoading(true);
+    console.log("[useAuth] Checking for currentUser in localStorage (INSECURE direct Firestore login mode).");
     const storedUser = localStorage.getItem('currentUser');
     if (storedUser) {
       try {
-        setUser(JSON.parse(storedUser));
+        const parsedUser: User = JSON.parse(storedUser);
+        setUser(parsedUser);
+        console.log("[useAuth] User loaded from localStorage:", parsedUser.email);
       } catch (e) {
+        console.error("[useAuth] Error parsing user from localStorage:", e);
         localStorage.removeItem('currentUser');
         setUser(null);
       }
+    } else {
+      console.log("[useAuth] No currentUser found in localStorage.");
     }
     setIsLoading(false);
   }, []); // Runs once on mount
@@ -43,7 +50,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // This effect handles redirection based on user state and current path
     if (!isLoading) {
       if (!user && pathname !== '/login') {
-        // router.replace('/login'); // Handled by HomePage or ProtectedRoute
+        // Redirection to /login is handled by HomePage or ProtectedRoute components
+        // to avoid premature redirection before they can assess auth state.
       } else if (user && pathname === '/login') {
         router.replace('/dashboard');
       }
@@ -51,27 +59,31 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [user, isLoading, pathname, router]);
 
   const login = async (email: string, password: string): Promise<boolean> => {
-    console.log(`Attempting login for email: '${email}' directly against Firestore (INSECURE).`);
+    console.log(`[useAuth] Attempting login for email: '${email}' directly against Firestore (INSECURE).`);
     setIsLoading(true);
     try {
+      // This now calls the direct Firestore login function from authService.ts
       const loggedInUser = await apiLogin(email, password);
       if (loggedInUser) {
         setUser(loggedInUser);
-        localStorage.setItem('currentUser', JSON.stringify(loggedInUser));
+        localStorage.setItem('currentUser', JSON.stringify(loggedInUser)); // Persist user for basic session
+        console.log("[useAuth] Login successful (direct Firestore), user set:", loggedInUser.email);
         setIsLoading(false);
         router.push('/dashboard'); // Navigate after successful login
         return true;
       }
+      console.log("[useAuth] Login failed (direct Firestore). apiLogin returned null.");
       setIsLoading(false);
       return false;
     } catch (error) {
-      console.error("Auth Hook: Error during login attempt:", error);
+      console.error("[useAuth] Auth Hook: Error during login attempt (direct Firestore):", error);
       setIsLoading(false);
       throw error; // Re-throw for the login page to handle
     }
   };
 
   const logout = async () => {
+    console.log("[useAuth] Logging out (direct Firestore login mode).");
     setIsLoading(true);
     await apiLogout(); // Clears localStorage
     setUser(null);

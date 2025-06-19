@@ -144,6 +144,7 @@ export default function UserManagementPage() {
                 <AlertDescription>
                 The authentication system has been modified to use direct Firestore login.
                 This means passwords are being stored and checked in plaintext, which is extremely insecure and should never be used in production.
+                Ensure all users in Firestore have a 'password' field for this system to work.
                 </AlertDescription>
             </Alert>
           </CardHeader>

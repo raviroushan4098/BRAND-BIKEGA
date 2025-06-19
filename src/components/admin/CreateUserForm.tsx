@@ -20,12 +20,13 @@ const userFormSchemaBase = z.object({
   role: z.enum(['user', 'admin']),
 });
 
-// Schema for creating a new user, password is required
+// Schema for creating a new user, password is required and will be stored in plaintext
 const createUserSchema = userFormSchemaBase.extend({
   password: z.string().min(6, "Password must be at least 6 characters."),
 });
 
 // Schema for editing an existing user, password is optional (only set if a new one is provided)
+// If password field is empty on edit, the existing password in Firestore will be retained.
 const editUserSchema = userFormSchemaBase.extend({
   password: z.string().min(6, "New password must be at least 6 characters.").optional().or(z.literal('')),
 });
@@ -48,7 +49,7 @@ const CreateUserForm: React.FC<CreateUserFormProps> = ({ isOpen, onOpenChange, o
       name: '',
       email: '',
       role: 'user',
-      password: '',
+      password: '', // Default to empty, will be filled if editing
     },
   });
 
@@ -73,27 +74,34 @@ const CreateUserForm: React.FC<CreateUserFormProps> = ({ isOpen, onOpenChange, o
   }, [initialData, form, isOpen]);
 
   const handleSubmit: SubmitHandler<UserFormValues> = (data) => {
-    const userDataToSubmit: Omit<User, 'id' | 'lastLogin'> = {
+    const userDataToSubmit: any = { // Use 'any' temporarily for easier construction
       name: data.name,
       email: data.email,
-      // Password WILL be stored in plaintext in Firestore. This is HIGHLY INSECURE.
-      password: data.password || (isEditing ? initialData?.password : ''), // Keep old password if not changed during edit, or set new if provided
       role: data.role,
       trackedChannels: initialData?.trackedChannels || { youtube: [], instagram: [] },
     };
 
-    // Ensure password is included for new users
-    if (!isEditing && !userDataToSubmit.password) {
-        // This case should ideally be caught by zod validation (min 6 chars for createUserSchema)
-        form.setError("password", { type: "manual", message: "Password is required for new users." });
-        return;
-    }
-     if (isEditing && !data.password && initialData) { // If editing and password field is empty, retain old password
-      userDataToSubmit.password = initialData.password;
+    // Handle password:
+    // - For new users, password from form is always used.
+    // - For existing users, if a new password is provided in the form, use it.
+    // - If editing and password field is empty, DO NOT include password in the submit data,
+    //   so authService.adminUpdateUser won't change it.
+    if (!isEditing) { // Creating new user
+        if (!data.password) { // Should be caught by Zod, but as a fallback
+            form.setError("password", { type: "manual", message: "Password is required for new users." });
+            return;
+        }
+        userDataToSubmit.password = data.password;
+    } else { // Editing existing user
+        if (data.password) { // If new password is provided
+            userDataToSubmit.password = data.password;
+        }
+        // If data.password is empty, it means "don't change password", so we don't add it to userDataToSubmit.
+        // The adminUpdateUser function in authService will only update fields present in the payload.
     }
 
 
-    onSubmitUser(userDataToSubmit, initialData?.id);
+    onSubmitUser(userDataToSubmit as Omit<User, 'id' | 'lastLogin'>, initialData?.id);
     onOpenChange(false);
   };
 
@@ -108,7 +116,7 @@ const CreateUserForm: React.FC<CreateUserFormProps> = ({ isOpen, onOpenChange, o
               : "Fill in the details to create a new user profile. The password entered will be stored directly."
             }
              <br/>
-            <span className="text-destructive font-semibold">SECURITY WARNING:</span> Passwords will be stored in plaintext in Firestore. This is highly insecure.
+            <span className="text-destructive font-semibold">CRITICAL SECURITY WARNING:</span> Passwords will be stored in plaintext in Firestore. This is highly insecure and bypasses Firebase Authentication.
           </DialogDescription>
         </DialogHeader>
         <Alert variant="destructive" className="mt-4">
@@ -160,7 +168,7 @@ const CreateUserForm: React.FC<CreateUserFormProps> = ({ isOpen, onOpenChange, o
                     <Input type="password" placeholder={isEditing ? "Leave blank to keep current" : "Enter password"} {...field} />
                   </FormControl>
                   <FormDescription>
-                    {isEditing ? "Enter a new password to change it. Min 6 characters." : "Min 6 characters. This password will be stored in plaintext (INSECURE)."}
+                    {isEditing ? "Enter a new password to change it. Min 6 characters. Will be stored in plaintext (INSECURE)." : "Min 6 characters. This password will be stored in plaintext (INSECURE)."}
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
