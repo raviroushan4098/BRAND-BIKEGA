@@ -22,37 +22,30 @@ const fetchUserProfileByEmail = async (email: string): Promise<User | null> => {
   const querySnapshot = await getDocs(q);
 
   if (querySnapshot.empty) {
-    console.log(`[AuthService-Debug] fetchUserProfileByEmail: No user found for email '${email.toLowerCase()}'`);
     return null;
   }
   const userDoc = querySnapshot.docs[0];
-  console.log(`[AuthService-Debug] fetchUserProfileByEmail: User found for email '${email.toLowerCase()}', ID: ${userDoc.id}`);
   return { id: userDoc.id, ...userDoc.data() } as User;
 };
 
 
 // LOGIN METHOD: Checks credentials directly against Firestore
 export const loginWithEmailPassword = async (email: string, passwordInput: string): Promise<User | null> => {
-  console.log(`[AuthService-Debug] Attempting direct Firestore login for email: '${email}'`);
   try {
-    const userProfile = await fetchUserProfileByEmail(email); 
+    const userProfile = await fetchUserProfileByEmail(email);
 
     if (userProfile) {
-      console.log(`[AuthService-Debug] User profile found in Firestore for '${userProfile.email}'. Stored password: '${userProfile.password}' (Actual stored value).`);
-      console.log(`[AuthService-Debug] Comparing input password '${passwordInput}' with stored password.`);
-
-      if (userProfile.password === passwordInput) { 
-        console.log("[AuthService-Debug] Passwords match. Updating lastLogin.");
+      if (userProfile.password === passwordInput) {
         const userRef = doc(db, 'users', userProfile.id);
         const lastLoginTime = new Date().toISOString();
         await updateDoc(userRef, { lastLogin: lastLoginTime });
         return { ...userProfile, lastLogin: lastLoginTime };
       } else {
-        console.error("[AuthService] Login failed: Passwords do not match. (Direct Firestore check)");
+        // Passwords do not match
         return null;
       }
     } else {
-      console.error(`[AuthService] Login failed: No user profile found in Firestore for email '${email}'. (Direct Firestore check)`);
+      // No user profile found
       return null;
     }
   } catch (error) {
@@ -63,7 +56,6 @@ export const loginWithEmailPassword = async (email: string, passwordInput: strin
 
 export const logoutService = async (): Promise<void> => {
   localStorage.removeItem('currentUser');
-  console.log("[AuthService] User logged out, currentUser removed from localStorage.");
 };
 
 
@@ -85,17 +77,16 @@ export const getAllUsers = async (): Promise<User[]> => {
 
 export const adminCreateUser = async (userData: Omit<User, 'id' | 'lastLogin'>): Promise<User | null> => {
   try {
-    const emailToStore = userData.email.toLowerCase(); 
+    const emailToStore = userData.email.toLowerCase();
     const existingUser = await fetchUserProfileByEmail(emailToStore);
     if (existingUser) {
-      console.error(`[AuthService] Error creating user profile: Email '${emailToStore}' already exists in Firestore.`);
       throw new Error('Email already exists.');
     }
 
     const newUserId = doc(collection(db, 'users')).id;
     const newUserProfile: User = {
       id: newUserId,
-      email: emailToStore, 
+      email: emailToStore,
       password: userData.password, // Storing password from form
       name: userData.name,
       role: userData.role,
@@ -103,10 +94,7 @@ export const adminCreateUser = async (userData: Omit<User, 'id' | 'lastLogin'>):
       trackedChannels: userData.trackedChannels || { youtube: [], instagram: [] },
     };
 
-    console.log("[AuthService-Admin] Saving new user profile to Firestore:", JSON.stringify(newUserProfile, (key, value) => key === 'password' ? '***REDACTED***' : value, 2));
-
     await setDoc(doc(db, 'users', newUserId), newUserProfile);
-    console.log(`[ADMIN ACTION] Created user PROFILE in Firestore for ${emailToStore} (ID: ${newUserId}).`);
     return newUserProfile;
   } catch (error) {
     console.error('[AuthService] Error creating user profile in Firestore (admin):', error);
@@ -128,8 +116,6 @@ export const adminUpdateUser = async (userId: string, userData: Partial<Omit<Use
       delete updateData.password;
     }
     
-    console.log(`[AuthService-Admin] Updating user profile ${userId} in Firestore with:`, JSON.stringify(updateData, (key, value) => key === 'password' ? '***REDACTED***' : value, 2));
-
     await updateDoc(userRef, updateData);
     return true;
   } catch (error) {
@@ -142,7 +128,6 @@ export const adminDeleteUser = async (userId: string): Promise<boolean> => {
   try {
     const userRef = doc(db, 'users', userId);
     await deleteDoc(userRef);
-    console.warn(`[ADMIN ACTION] User profile ${userId} deleted from Firestore.`);
     return true;
   } catch (error) {
     console.error("Error deleting user profile (admin):", error);
