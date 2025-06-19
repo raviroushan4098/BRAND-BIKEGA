@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import AppLayout from '@/components/layout/AppLayout';
 import YouTubeCard from '@/components/analytics/YouTubeCard';
-import { type YouTubeVideo } from '@/lib/mockData'; // Keep type, remove mockYouTubeData
+import { type YouTubeVideo } from '@/lib/mockData';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,7 @@ import { useAuth } from '@/hooks/useAuth';
 import type { User } from '@/lib/authService';
 import { getAllUsers as apiGetAllUsers } from '@/lib/authService';
 import { assignYouTubeLinksToUser, getYouTubeLinksForUser } from '@/lib/youtubeLinkService';
+import { fetchYouTubeDetails } from '@/ai/flows/fetch-youtube-details-flow'; // Import the Genkit flow
 import { toast } from '@/hooks/use-toast';
 import { BarChart3, UserPlus, LinkIcon, FileText, UploadCloud, Users, DownloadCloud, Loader2, YoutubeIcon } from 'lucide-react';
 
@@ -29,9 +30,10 @@ export default function YouTubeManagementPage() {
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
   const [isAssigning, setIsAssigning] = useState(false);
 
-  const [assignedLinks, setAssignedLinks] = useState<string[]>([]);
-  const [videosToDisplay, setVideosToDisplay] = useState<YouTubeVideo[]>([]);
+  // const [assignedLinks, setAssignedLinks] = useState<string[]>([]); // No longer directly needed for display logic if videosToDisplay is primary
+  const [videosToDisplay, setVideosToDisplay] = useState<Partial<YouTubeVideo>[]>([]); // Use Partial as some data might be missing initially or on error
   const [isLoadingVideos, setIsLoadingVideos] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   const fetchUsersForAdmin = useCallback(async () => {
     if (user?.role === 'admin') {
@@ -56,48 +58,65 @@ export default function YouTubeManagementPage() {
     try {
       const urlObj = new URL(url);
       if (urlObj.hostname === 'youtu.be') {
-        videoId = urlObj.pathname.slice(1).split('?')[0];
+        videoId = urlObj.pathname.slice(1).split(/[?&]/)[0];
       } else if (urlObj.hostname.includes('youtube.com')) {
         if (urlObj.pathname.startsWith('/embed/')) {
-          videoId = urlObj.pathname.split('/embed/')[1].split('?')[0];
+          videoId = urlObj.pathname.split('/embed/')[1].split(/[?&]/)[0];
         } else if (urlObj.pathname.startsWith('/watch')) {
           videoId = urlObj.searchParams.get('v');
+        } else if (urlObj.pathname.startsWith('/shorts/')) {
+          videoId = urlObj.pathname.split('/shorts/')[1].split(/[?&]/)[0];
         }
       }
-      if (videoId && videoId.includes('&')) {
+      if (videoId && videoId.includes('&')) { // Sanitize if params still exist
         videoId = videoId.split('&')[0];
+      }
+      if (videoId && videoId.includes('?')) {
+        videoId = videoId.split('?')[0];
       }
     } catch (e) { return null; }
     return videoId;
   };
-
-  const transformLinksToVideos = useCallback((links: string[]): YouTubeVideo[] => {
-    return links.map((link, index) => {
-      const videoId = extractYouTubeVideoId(link);
-      return {
-        id: videoId || `link-${index}-${Date.now()}`,
-        title: videoId ? `Video: ${videoId}` : new URL(link).pathname.slice(1,20) || "Untitled Video",
-        thumbnailUrl: `https://placehold.co/320x180.png?text=${videoId || 'Video'}`,
-        likes: Math.floor(Math.random() * 100),
-        comments: Math.floor(Math.random() * 50),
-        shares: Math.floor(Math.random() * 20),
-        views: Math.floor(Math.random() * 1000) + 50,
-      };
-    });
-  }, []);
-
+  
   const fetchAndDisplayUserVideos = useCallback(async (userIdToFetch: string) => {
     if (!userIdToFetch) {
-      setAssignedLinks([]);
+      setVideosToDisplay([]);
+      setFetchError(null);
       return;
     }
     setIsLoadingVideos(true);
+    setFetchError(null);
+    setVideosToDisplay([]); // Clear previous videos
+
     try {
       const links = await getYouTubeLinksForUser(userIdToFetch);
-      setAssignedLinks(links);
-    } catch (error) {
-      // Error handling, perhaps a toast if needed, but keep UI clean
-      setAssignedLinks([]);
+      if (links.length === 0) {
+        setVideosToDisplay([]);
+        setIsLoadingVideos(false);
+        return;
+      }
+
+      const videoIds = Array.from(new Set(links.map(extractYouTubeVideoId).filter(id => id !== null) as string[]));
+
+      if (videoIds.length > 0) {
+        try {
+          const result = await fetchYouTubeDetails({ videoIds });
+          setVideosToDisplay(result.videos);
+        } catch (flowError: any) {
+            console.error("Error fetching video details via flow:", flowError);
+            setFetchError(`Failed to fetch video details: ${flowError.message || 'Unknown error'}. Ensure API key is valid.`);
+            // Display links as basic cards if API fails
+            setVideosToDisplay(videoIds.map(id => ({ id, title: `Video: ${id}`, thumbnailUrl: `https://placehold.co/320x180.png?text=${id}` })));
+            toast({ title: "Video Fetch Error", description: `Could not load full video details. Displaying basic info. ${flowError.message}`, variant: "destructive"});
+        }
+      } else {
+        setVideosToDisplay([]);
+      }
+    } catch (error: any) {
+      console.error("Error fetching user links:", error);
+      setFetchError("Could not load assigned YouTube links.");
+      setVideosToDisplay([]);
+      toast({ title: "Error", description: "Could not load assigned YouTube links for the user.", variant: "destructive"});
     }
     setIsLoadingVideos(false);
   }, []);
@@ -107,22 +126,13 @@ export default function YouTubeManagementPage() {
       if (selectedUserIdForAdmin) {
         fetchAndDisplayUserVideos(selectedUserIdForAdmin);
       } else {
-        setVideosToDisplay([]); // Clear videos if no user selected by admin
-        setAssignedLinks([]);
+        setVideosToDisplay([]); 
+        setFetchError(null);
       }
-    } else if (user) { // Non-admin user
+    } else if (user) { 
       fetchAndDisplayUserVideos(user.id);
     }
   }, [user, selectedUserIdForAdmin, fetchAndDisplayUserVideos]);
-  
-  useEffect(() => {
-    if (assignedLinks.length > 0) {
-      setVideosToDisplay(transformLinksToVideos(assignedLinks));
-    } else {
-      setVideosToDisplay([]);
-    }
-  }, [assignedLinks, transformLinksToVideos]);
-
 
   const handleDownloadCsvTemplate = () => {
     const csvContent = "link\n";
@@ -178,7 +188,8 @@ export default function YouTubeManagementPage() {
       }
     }
     
-    const uniqueLinksFromInput = Array.from(new Set(linksFromInput));
+    const uniqueLinksFromInput = Array.from(new Set(linksFromInput.map(link => link.trim()).filter(Boolean)));
+
 
     if (uniqueLinksFromInput.length === 0) {
       toast({ title: "No Valid Links", description: "No valid YouTube links were found in your input to assign.", variant: "destructive" });
@@ -199,12 +210,12 @@ export default function YouTubeManagementPage() {
       setCsvFile(null);
       const fileInput = document.getElementById('csv-upload') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
-      // Refresh videos for the currently selected user
+      
       if (selectedUserIdForAdmin) {
-        fetchAndDisplayUserVideos(selectedUserIdForAdmin);
+        fetchAndDisplayUserVideos(selectedUserIdForAdmin); // Refresh videos for the currently selected user
       }
     } else {
-      toast({ title: "Assignment Failed", description: "Could not assign links to the user in the 'youtube' collection.", variant: "destructive" });
+      toast({ title: "Assignment Failed", description: "Could not assign links to the user.", variant: "destructive" });
     }
     setIsAssigning(false);
   };
@@ -228,7 +239,7 @@ export default function YouTubeManagementPage() {
           resolve([]);
           return;
         }
-        let lines = text.split(/\r\n|\n/).map(line => line.trim()).filter(Boolean); 
+        let lines = text.split(/\r\n|\n|\r/).map(line => line.trim()).filter(Boolean); 
         
         if (lines.length > 0 && lines[0].trim().toLowerCase() === 'link') {
           lines = lines.slice(1);
@@ -332,30 +343,31 @@ export default function YouTubeManagementPage() {
             </CardContent>
             <CardFooter>
               <Button onClick={handleAssignLinks} disabled={isAssigning || !selectedUserIdForAdmin || (!singleLink && !csvFile)}>
-                <UploadCloud className="mr-2 h-5 w-5" />
+                {isAssigning ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <UploadCloud className="mr-2 h-5 w-5" />}
                 {isAssigning ? 'Assigning...' : 'Assign Links'}
               </Button>
             </CardFooter>
           </Card>
         )}
         
-        {/* Display Area for Video Cards */}
         <Card>
           <CardHeader>
             <CardTitle className="text-2xl">
               {user?.role === 'admin' 
-                ? (selectedUserIdForAdmin ? `${usersForAdminSelect.find(u=>u.id === selectedUserIdForAdmin)?.name || 'Selected User'}'s Assigned Videos` : 'Select a User to View Videos')
-                : "Your Assigned YouTube Videos"
+                ? (selectedUserIdForAdmin ? `${usersForAdminSelect.find(u=>u.id === selectedUserIdForAdmin)?.name || 'Selected User'}'s Videos` : 'Select a User to View Videos')
+                : "Your YouTube Videos"
               }
             </CardTitle>
             <CardDescription>
               {user?.role === 'admin' && !selectedUserIdForAdmin 
-                ? 'Please select a user from the dropdown above to see their assigned videos.'
+                ? 'Please select a user from the dropdown above to see their videos.'
                 : isLoadingVideos 
                   ? 'Loading video information...' 
-                  : videosToDisplay.length > 0 
-                    ? `Displaying ${videosToDisplay.length} video(s). Data shown is placeholder.`
-                    : (user?.role !== 'admin' ? 'You have no YouTube videos assigned yet.' : 'This user has no YouTube videos assigned.')
+                  : fetchError
+                    ? `Error: ${fetchError}`
+                    : videosToDisplay.length > 0 
+                      ? `Displaying ${videosToDisplay.length} video(s).`
+                      : (user?.role !== 'admin' ? 'You have no YouTube videos assigned yet.' : 'This user has no YouTube videos assigned, or links provided are invalid.')
               }
             </CardDescription>
           </CardHeader>
@@ -367,15 +379,22 @@ export default function YouTubeManagementPage() {
             ) : videosToDisplay.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {videosToDisplay.map((video) => (
-                  <YouTubeCard key={video.id} video={video} />
+                  <YouTubeCard key={video.id} video={video as YouTubeVideo} /> // Cast to YouTubeVideo as flow ensures structure
                 ))}
               </div>
             ) : (
               <div className="text-center py-10 text-muted-foreground">
                 <YoutubeIcon className="h-16 w-16 mx-auto mb-4 opacity-50" />
+                {fetchError && !isLoadingVideos && <p className="text-destructive mb-2">{fetchError}</p>}
                 {user?.role === 'admin' && !selectedUserIdForAdmin
                   ? <p>Select a user above to see their tracked YouTube videos.</p>
                   : <p>No YouTube videos to display.</p>
+                }
+                 {user?.role !== 'admin' && !isLoadingVideos && videosToDisplay.length === 0 && !fetchError &&
+                  <p>You can request your admin to assign YouTube videos to your account.</p>
+                }
+                {user?.role === 'admin' && selectedUserIdForAdmin && !isLoadingVideos && videosToDisplay.length === 0 && !fetchError &&
+                  <p>Assign YouTube videos to this user using the form above.</p>
                 }
               </div>
             )}
@@ -385,4 +404,3 @@ export default function YouTubeManagementPage() {
     </AppLayout>
   );
 }
-
