@@ -38,7 +38,7 @@ export const fetchUserProfile = async (firebaseUser: FirebaseUser): Promise<User
   const userRef = doc(db, 'users', firebaseUser.uid);
   const userSnap = await getDoc(userRef);
   if (userSnap.exists()) {
-    // Update lastLogin time on fetch if it's different (or simply upon login success)
+    // User profile exists, update lastLogin time
     const userData = userSnap.data() as User;
     const lastLoginTime = firebaseUser.metadata.lastSignInTime || new Date().toISOString();
     if (userData.lastLogin !== lastLoginTime) {
@@ -47,7 +47,7 @@ export const fetchUserProfile = async (firebaseUser: FirebaseUser): Promise<User
     }
     return userData;
   } else {
-    // If profile doesn't exist, create a basic one
+    // If profile doesn't exist in Firestore (e.g., first login for an Auth user), create a basic one.
     console.warn(`User profile for ${firebaseUser.uid} not found in Firestore. Creating one.`);
     return storeUserProfile(firebaseUser, { name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] });
   }
@@ -58,17 +58,21 @@ export const loginWithEmailPassword = async (email: string, password: string): P
   try {
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
     const firebaseUser = userCredential.user;
+    
+    // After successful Firebase Authentication, fetch/create the user's profile from Firestore.
     const userProfile = await fetchUserProfile(firebaseUser);
+    
     if (userProfile) {
-      const userRef = doc(db, 'users', firebaseUser.uid);
-      const newLastLogin = new Date().toISOString();
-      await setDoc(userRef, { lastLogin: newLastLogin }, { merge: true });
-      return { ...userProfile, lastLogin: newLastLogin };
+      // Ensure lastLogin is updated in Firestore if it was fetched (fetchUserProfile handles this)
+      // and return the comprehensive user profile.
+      return { ...userProfile, lastLogin: firebaseUser.metadata.lastSignInTime || new Date().toISOString() };
     }
     return null; 
   } catch (error) {
     console.error("Error logging in with email/password:", error);
-    return null;
+    // Ensure the error is re-thrown or handled appropriately if needed by the caller
+    // For now, returning null indicates failure to the caller (useAuth hook)
+    throw error; // Re-throwing allows the caller to catch Firebase specific errors if needed
   }
 };
 
@@ -76,6 +80,7 @@ export const signUpWithEmailPassword = async (name: string, email: string, passw
   try {
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
     const firebaseUser = userCredential.user;
+    // Store additional profile information in Firestore
     return storeUserProfile(firebaseUser, { name, email, role, trackedChannels });
   } catch (error) {
     console.error("Error signing up with email/password:", error);
@@ -84,11 +89,14 @@ export const signUpWithEmailPassword = async (name: string, email: string, passw
 };
 
 export const getCurrentUser = (callback: (user: User | null) => void): (() => void) => {
+  // Observes Firebase Auth state changes
   return onAuthStateChanged(auth, async (firebaseUser) => {
     if (firebaseUser) {
+      // If a Firebase user is authenticated, fetch their profile from Firestore
       const userProfile = await fetchUserProfile(firebaseUser);
       callback(userProfile);
     } else {
+      // No Firebase user authenticated
       callback(null);
     }
   });
@@ -122,27 +130,22 @@ export const getAllUsers = async (): Promise<User[]> => {
 // Admin creates a user profile in Firestore.
 // IMPORTANT: This function DOES NOT create a Firebase Authentication user.
 // The admin must create the auth user in the Firebase Console for them to be able to log in.
-// The 'password' field in userData is for the form but not used here for Auth creation.
-export const adminCreateUser = async (userData: Omit<User, 'id' | 'lastLogin' > & {password: string}): Promise<User | null> => {
+export const adminCreateUser = async (userData: Omit<User, 'id' | 'lastLogin' > & {password?: string}): Promise<User | null> => {
   try {
-    // This ID will be for the Firestore document. The actual Firebase Auth UID will be different
-    // and needs to be associated if/when the auth user is created by an admin.
-    // For simplicity, we generate a new ID here. If an admin creates an Auth user, they'd ideally
-    // use that UID as the document ID here. This current flow is a simplified prototype approach.
+    // This ID will be for the Firestore document. For this prototype, we ensure it's unique.
+    // A more robust system might require the admin to provide the Firebase Auth UID if the Auth user is created first.
     const newUserId = doc(collection(db, 'users')).id; 
     
     const newUserProfile: User = {
-      id: newUserId, // This is the Firestore document ID, not necessarily the Auth UID.
+      id: newUserId, 
       email: userData.email,
       name: userData.name,
       role: userData.role,
-      lastLogin: new Date(0).toISOString(), // Indicates never logged in or unknown
+      lastLogin: new Date(0).toISOString(), // Indicates never logged in or unknown default
       trackedChannels: userData.trackedChannels || { youtube: [], instagram: [] },
     };
     await setDoc(doc(db, 'users', newUserId), newUserProfile);
-    console.log('Created new user profile in Firestore:', newUserProfile);
-    // Note: The userData.password is collected by the form but NOT used here to create an Auth record.
-    // This is a critical distinction for the admin to understand.
+    // The userData.password is from the form but NOT used here to create an Auth record.
     return newUserProfile;
   } catch (error) {
     console.error('Error creating user profile in Firestore (admin):', error);
@@ -150,12 +153,10 @@ export const adminCreateUser = async (userData: Omit<User, 'id' | 'lastLogin' > 
   }
 };
 
-export const adminUpdateUser = async (userId: string, userData: Partial<Omit<User, 'id'>>): Promise<boolean> => {
+export const adminUpdateUser = async (userId: string, userData: Partial<Omit<User, 'id' | 'email'>>): Promise<boolean> => {
   try {
     const userRef = doc(db, 'users', userId);
-    // Ensure email is not part of the update data if it's not allowed to be changed
-    const { email, ...updateData } = userData;
-    await updateDoc(userRef, updateData);
+    await updateDoc(userRef, userData);
     return true;
   } catch (error) {
     console.error("Error updating user profile (admin):", error);
