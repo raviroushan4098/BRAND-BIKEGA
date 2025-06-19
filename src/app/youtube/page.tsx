@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import AppLayout from '@/components/layout/AppLayout';
 import YouTubeCard from '@/components/analytics/YouTubeCard';
-import { type YouTubeVideo } from '@/lib/mockData';
+import { type YouTubeVideo } from '@/lib/mockData'; // Assuming YouTubeVideo defines all sortable keys
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -16,8 +16,14 @@ import { getAllUsers as apiGetAllUsers } from '@/lib/authService';
 import { assignYouTubeLinksToUser, getYouTubeLinksForUser } from '@/lib/youtubeLinkService';
 import { fetchYouTubeDetails } from '@/ai/flows/fetch-youtube-details-flow';
 import { toast } from '@/hooks/use-toast';
-import { BarChart3, UserPlus, LinkIcon, FileText, UploadCloud, Users, DownloadCloud, Loader2, YoutubeIcon, Eye, ThumbsUp, MessageSquare, ListVideo } from 'lucide-react';
+import {
+  BarChart3, UserPlus, LinkIcon, FileText, UploadCloud, Users, DownloadCloud, Loader2, YoutubeIcon, Eye, ThumbsUp, MessageSquare, ListVideo,
+  CalendarIcon, ArrowUpDown, XCircle, FilterX
+} from 'lucide-react';
 import { Skeleton } from "@/components/ui/skeleton";
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { format, isValid as isValidDate } from 'date-fns';
 
 interface SummaryStats {
   totalVideos: number;
@@ -25,6 +31,10 @@ interface SummaryStats {
   totalLikes: number;
   totalComments: number;
 }
+
+// Define a more specific type for sortable keys if YouTubeVideo is too broad or includes non-sortable fields
+type SortableVideoKey = 'publishedAt' | 'views' | 'likes' | 'comments' | 'title';
+
 
 export default function YouTubeManagementPage() {
   const { user } = useAuth();
@@ -38,10 +48,15 @@ export default function YouTubeManagementPage() {
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
   const [isAssigning, setIsAssigning] = useState(false);
 
+  const [allFetchedVideos, setAllFetchedVideos] = useState<Partial<YouTubeVideo>[]>([]);
   const [videosToDisplay, setVideosToDisplay] = useState<Partial<YouTubeVideo>[]>([]);
   const [isLoadingVideos, setIsLoadingVideos] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [summaryStats, setSummaryStats] = useState<SummaryStats | null>(null);
+
+  const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined });
+  const [sortConfig, setSortConfig] = useState<{ key: SortableVideoKey; order: 'asc' | 'desc' }>({ key: 'publishedAt', order: 'desc' });
+
 
   const fetchUsersForAdmin = useCallback(async () => {
     if (user?.role === 'admin') {
@@ -88,6 +103,7 @@ export default function YouTubeManagementPage() {
   
   const fetchAndDisplayUserVideos = useCallback(async (userIdToFetch: string) => {
     if (!userIdToFetch) {
+      setAllFetchedVideos([]);
       setVideosToDisplay([]);
       setFetchError(null);
       setSummaryStats(null);
@@ -95,12 +111,14 @@ export default function YouTubeManagementPage() {
     }
     setIsLoadingVideos(true);
     setFetchError(null);
+    setAllFetchedVideos([]);
     setVideosToDisplay([]);
     setSummaryStats(null);
 
     try {
       const links = await getYouTubeLinksForUser(userIdToFetch);
       if (links.length === 0) {
+        setAllFetchedVideos([]);
         setVideosToDisplay([]);
         setIsLoadingVideos(false);
         return;
@@ -111,42 +129,91 @@ export default function YouTubeManagementPage() {
       if (videoIds.length > 0) {
         try {
           const result = await fetchYouTubeDetails({ videoIds });
-          setVideosToDisplay(result.videos);
+          setAllFetchedVideos(result.videos); // Store raw fetched videos
         } catch (flowError: any) {
             console.error("Error fetching video details via flow:", flowError);
             const errorMessage = flowError.message || 'Unknown error';
             const errorDetailsMsg = 'Failed to fetch video details: ' + errorMessage + '. Ensure API key is valid.';
             setFetchError(errorDetailsMsg);
-            setVideosToDisplay(videoIds.map(id => ({ id, title: `Video ID: ${id}`, thumbnailUrl: `https://placehold.co/320x180.png?text=${id}` })));
+            // Display basic info if flow fails but we have IDs
+            setAllFetchedVideos(videoIds.map(id => ({ id, title: `Video ID: ${id}`, thumbnailUrl: `https://placehold.co/320x180.png?text=${id}` })));
             
             const toastDescription = 'Could not load full video details. Displaying basic info. ' + errorMessage;
             toast({ title: "Video Fetch Error", description: toastDescription, variant: "destructive"});
         }
       } else {
-        setVideosToDisplay([]);
+        setAllFetchedVideos([]);
       }
     } catch (error: any) {
       console.error("Error fetching user links:", error);
       setFetchError("Could not load assigned YouTube links.");
-      setVideosToDisplay([]);
+      setAllFetchedVideos([]);
       toast({ title: "Error", description: "Could not load assigned YouTube links for the user.", variant: "destructive"});
     }
     setIsLoadingVideos(false);
   }, []);
 
   useEffect(() => {
-    if (user?.role === 'admin') {
-      if (selectedUserIdForAdmin) {
-        fetchAndDisplayUserVideos(selectedUserIdForAdmin);
-      } else {
-        setVideosToDisplay([]); 
-        setFetchError(null);
-        setSummaryStats(null);
-      }
-    } else if (user) { 
-      fetchAndDisplayUserVideos(user.id);
+    const targetUserId = user?.role === 'admin' && selectedUserIdForAdmin ? selectedUserIdForAdmin : user?.id;
+    if (targetUserId) {
+      fetchAndDisplayUserVideos(targetUserId);
+    } else {
+      setAllFetchedVideos([]);
+      setVideosToDisplay([]);
+      setFetchError(null);
+      setSummaryStats(null);
     }
   }, [user, selectedUserIdForAdmin, fetchAndDisplayUserVideos]);
+
+
+  // Effect for filtering and sorting
+  useEffect(() => {
+    let processedVideos = [...allFetchedVideos];
+
+    // Filtering logic (to be fully implemented in next step)
+    if (dateRange.from || dateRange.to) {
+      processedVideos = processedVideos.filter(video => {
+        if (!video.publishedAt) return false;
+        const publishedDate = new Date(video.publishedAt);
+        if (dateRange.from && publishedDate < dateRange.from) return false;
+        if (dateRange.to) {
+            const toDate = new Date(dateRange.to);
+            toDate.setHours(23, 59, 59, 999); // Include the entire 'to' day
+            if (publishedDate > toDate) return false;
+        }
+        return true;
+      });
+    }
+
+    // Sorting logic
+    if (sortConfig.key) {
+      processedVideos.sort((a, b) => {
+        const valA = a[sortConfig.key as keyof YouTubeVideo];
+        const valB = b[sortConfig.key as keyof YouTubeVideo];
+
+        if (valA === undefined || valA === null) return sortConfig.order === 'asc' ? -1 : 1;
+        if (valB === undefined || valB === null) return sortConfig.order === 'asc' ? 1 : -1;
+
+        if (sortConfig.key === 'publishedAt') {
+          // Date sorting
+          const dateA = new Date(valA as string).getTime();
+          const dateB = new Date(valB as string).getTime();
+          return sortConfig.order === 'asc' ? dateA - dateB : dateB - dateA;
+        } else if (['views', 'likes', 'comments'].includes(sortConfig.key)) {
+          // Numeric sorting
+          return sortConfig.order === 'asc' ? (valA as number) - (valB as number) : (valB as number) - (valA as number);
+        } else if (sortConfig.key === 'title') {
+           // String sorting
+           return sortConfig.order === 'asc' 
+             ? (valA as string).localeCompare(valB as string) 
+             : (valB as string).localeCompare(valA as string);
+        }
+        return 0;
+      });
+    }
+    setVideosToDisplay(processedVideos);
+  }, [allFetchedVideos, dateRange, sortConfig]);
+
 
   useEffect(() => {
     if (videosToDisplay.length > 0) {
@@ -288,6 +355,19 @@ export default function YouTubeManagementPage() {
     });
   };
 
+  const handleSortChange = (value: string) => {
+    setSortConfig(prev => ({ ...prev, key: value as SortableVideoKey }));
+  };
+
+  const toggleSortOrder = () => {
+    setSortConfig(prev => ({ ...prev, order: prev.order === 'asc' ? 'desc' : 'asc' }));
+  };
+
+  const handleClearFilters = () => {
+    setDateRange({ from: undefined, to: undefined });
+    setSortConfig({ key: 'publishedAt', order: 'desc' });
+  };
+
   const StatCard: React.FC<{icon: React.ElementType, label: string, value: string | number}> = ({ icon: Icon, label, value }) => (
     <div className="flex flex-col items-center justify-center p-4 bg-card rounded-lg shadow hover:shadow-md transition-shadow">
       <Icon className="h-8 w-8 text-primary mb-2" />
@@ -394,6 +474,89 @@ export default function YouTubeManagementPage() {
           </Card>
         )}
 
+        {/* Filter and Sort Controls Card */}
+        <Card className="mb-6 shadow-md">
+          <CardHeader>
+            <CardTitle className="text-xl font-semibold">Filter & Sort Videos</CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="space-y-2">
+              <Label htmlFor="date-from">Published Date From</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    id="date-from"
+                    variant={"outline"}
+                    className={`w-full justify-start text-left font-normal ${!dateRange.from && "text-muted-foreground"}`}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {dateRange.from ? format(dateRange.from, "PPP") : <span>Pick a start date</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={dateRange.from}
+                    onSelect={(date) => setDateRange(prev => ({ ...prev, from: date }))}
+                    disabled={(date) => (dateRange.to ? date > dateRange.to : false) || date > new Date()}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="date-to">Published Date To</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    id="date-to"
+                    variant={"outline"}
+                    className={`w-full justify-start text-left font-normal ${!dateRange.to && "text-muted-foreground"}`}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {dateRange.to ? format(dateRange.to, "PPP") : <span>Pick an end date</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={dateRange.to}
+                    onSelect={(date) => setDateRange(prev => ({ ...prev, to: date }))}
+                    disabled={(date) => (dateRange.from ? date < dateRange.from : false) || date > new Date()}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="sort-by">Sort By</Label>
+              <div className="flex gap-2">
+                <Select value={sortConfig.key} onValueChange={(value) => handleSortChange(value as SortableVideoKey)}>
+                  <SelectTrigger id="sort-by" className="flex-grow">
+                    <SelectValue placeholder="Select sort field" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="publishedAt">Published Date</SelectItem>
+                    <SelectItem value="views">Views</SelectItem>
+                    <SelectItem value="likes">Likes</SelectItem>
+                    <SelectItem value="comments">Comments</SelectItem>
+                    <SelectItem value="title">Title</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button variant="outline" size="icon" onClick={toggleSortOrder} title={`Sort ${sortConfig.order === 'asc' ? 'Descending' : 'Ascending'}`}>
+                  <ArrowUpDown className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+          <CardFooter>
+            <Button variant="outline" onClick={handleClearFilters}>
+              <FilterX className="mr-2 h-4 w-4" /> Clear Filters & Sort
+            </Button>
+          </CardFooter>
+        </Card>
+
+
         {isLoadingVideos && !summaryStats && (
           <Card className="mb-6">
             <CardHeader>
@@ -414,7 +577,7 @@ export default function YouTubeManagementPage() {
             <CardHeader>
               <CardTitle className="text-xl font-semibold">Performance Overview</CardTitle>
               <CardDescription>
-                Summary for {user?.role === 'admin' && selectedUserIdForAdmin ? `${usersForAdminSelect.find(u=>u.id === selectedUserIdForAdmin)?.name || 'the selected user'}'s` : "your"} {summaryStats.totalVideos} video(s).
+                Summary for {user?.role === 'admin' && selectedUserIdForAdmin ? `${usersForAdminSelect.find(u=>u.id === selectedUserIdForAdmin)?.name || 'the selected user'}'s` : "your"} {summaryStats.totalVideos} video(s) { (dateRange.from || dateRange.to) ? "(filtered)" : ""}.
               </CardDescription>
             </CardHeader>
             <CardContent className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-4">
@@ -442,8 +605,8 @@ export default function YouTubeManagementPage() {
                   : fetchError
                     ? `Error: ${fetchError}`
                     : videosToDisplay.length > 0 
-                      ? `Displaying ${videosToDisplay.length} video(s).`
-                      : (user?.role !== 'admin' ? 'You have no YouTube videos assigned yet.' : 'This user has no YouTube videos assigned, or links provided are invalid.')
+                      ? `Displaying ${videosToDisplay.length} of ${allFetchedVideos.length} video(s). Sorted by ${sortConfig.key} (${sortConfig.order}).`
+                      : (user?.role !== 'admin' ? 'You have no YouTube videos assigned, or they are filtered out.' : 'This user has no YouTube videos assigned, or links provided are invalid, or they are filtered out.')
               }
             </CardDescription>
           </CardHeader>
@@ -464,12 +627,12 @@ export default function YouTubeManagementPage() {
                 {fetchError && !isLoadingVideos && <p className="text-destructive mb-2">{fetchError}</p>}
                 {user?.role === 'admin' && !selectedUserIdForAdmin
                   ? <p>Select a user above to see their tracked YouTube videos.</p>
-                  : <p>No YouTube videos to display.</p>
+                  : <p>No YouTube videos to display with current filters.</p>
                 }
-                 {user?.role !== 'admin' && !isLoadingVideos && videosToDisplay.length === 0 && !fetchError &&
+                 {user?.role !== 'admin' && !isLoadingVideos && allFetchedVideos.length === 0 && !fetchError &&
                   <p>You can request your admin to assign YouTube videos to your account.</p>
                 }
-                {user?.role === 'admin' && selectedUserIdForAdmin && !isLoadingVideos && videosToDisplay.length === 0 && !fetchError &&
+                {user?.role === 'admin' && selectedUserIdForAdmin && !isLoadingVideos && allFetchedVideos.length === 0 && !fetchError &&
                   <p>Assign YouTube videos to this user using the form above.</p>
                 }
               </div>
