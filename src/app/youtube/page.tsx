@@ -14,9 +14,17 @@ import { useAuth } from '@/hooks/useAuth';
 import type { User } from '@/lib/authService';
 import { getAllUsers as apiGetAllUsers } from '@/lib/authService';
 import { assignYouTubeLinksToUser, getYouTubeLinksForUser } from '@/lib/youtubeLinkService';
-import { fetchYouTubeDetails } from '@/ai/flows/fetch-youtube-details-flow'; // Import the Genkit flow
+import { fetchYouTubeDetails } from '@/ai/flows/fetch-youtube-details-flow';
 import { toast } from '@/hooks/use-toast';
-import { BarChart3, UserPlus, LinkIcon, FileText, UploadCloud, Users, DownloadCloud, Loader2, YoutubeIcon } from 'lucide-react';
+import { BarChart3, UserPlus, LinkIcon, FileText, UploadCloud, Users, DownloadCloud, Loader2, YoutubeIcon, Eye, ThumbsUp, MessageSquare, ListVideo } from 'lucide-react';
+import { Skeleton } from "@/components/ui/skeleton";
+
+interface SummaryStats {
+  totalVideos: number;
+  totalViews: number;
+  totalLikes: number;
+  totalComments: number;
+}
 
 export default function YouTubeManagementPage() {
   const { user } = useAuth();
@@ -30,10 +38,10 @@ export default function YouTubeManagementPage() {
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
   const [isAssigning, setIsAssigning] = useState(false);
 
-  // const [assignedLinks, setAssignedLinks] = useState<string[]>([]); // No longer directly needed for display logic if videosToDisplay is primary
-  const [videosToDisplay, setVideosToDisplay] = useState<Partial<YouTubeVideo>[]>([]); // Use Partial as some data might be missing initially or on error
+  const [videosToDisplay, setVideosToDisplay] = useState<Partial<YouTubeVideo>[]>([]);
   const [isLoadingVideos, setIsLoadingVideos] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [summaryStats, setSummaryStats] = useState<SummaryStats | null>(null);
 
   const fetchUsersForAdmin = useCallback(async () => {
     if (user?.role === 'admin') {
@@ -68,7 +76,7 @@ export default function YouTubeManagementPage() {
           videoId = urlObj.pathname.split('/shorts/')[1].split(/[?&]/)[0];
         }
       }
-      if (videoId && videoId.includes('&')) { // Sanitize if params still exist
+      if (videoId && videoId.includes('&')) {
         videoId = videoId.split('&')[0];
       }
       if (videoId && videoId.includes('?')) {
@@ -82,11 +90,13 @@ export default function YouTubeManagementPage() {
     if (!userIdToFetch) {
       setVideosToDisplay([]);
       setFetchError(null);
+      setSummaryStats(null);
       return;
     }
     setIsLoadingVideos(true);
     setFetchError(null);
-    setVideosToDisplay([]); // Clear previous videos
+    setVideosToDisplay([]);
+    setSummaryStats(null);
 
     try {
       const links = await getYouTubeLinksForUser(userIdToFetch);
@@ -105,8 +115,7 @@ export default function YouTubeManagementPage() {
         } catch (flowError: any) {
             console.error("Error fetching video details via flow:", flowError);
             setFetchError(`Failed to fetch video details: ${flowError.message || 'Unknown error'}. Ensure API key is valid.`);
-            // Display links as basic cards if API fails
-            setVideosToDisplay(videoIds.map(id => ({ id, title: `Video: ${id}`, thumbnailUrl: `https://placehold.co/320x180.png?text=${id}` })));
+            setVideosToDisplay(videoIds.map(id => ({ id, title: `Video ID: ${id}`, thumbnailUrl: `https://placehold.co/320x180.png?text=${id}` })));
             toast({ title: "Video Fetch Error", description: `Could not load full video details. Displaying basic info. ${flowError.message}`, variant: "destructive"});
         }
       } else {
@@ -128,11 +137,34 @@ export default function YouTubeManagementPage() {
       } else {
         setVideosToDisplay([]); 
         setFetchError(null);
+        setSummaryStats(null);
       }
     } else if (user) { 
       fetchAndDisplayUserVideos(user.id);
     }
   }, [user, selectedUserIdForAdmin, fetchAndDisplayUserVideos]);
+
+  useEffect(() => {
+    if (videosToDisplay.length > 0) {
+      const newSummaryStats: SummaryStats = videosToDisplay.reduce(
+        (acc, video) => {
+          acc.totalViews += video.views || 0;
+          acc.totalLikes += video.likes || 0;
+          acc.totalComments += video.comments || 0;
+          return acc;
+        },
+        {
+          totalVideos: videosToDisplay.length,
+          totalViews: 0,
+          totalLikes: 0,
+          totalComments: 0,
+        }
+      );
+      setSummaryStats(newSummaryStats);
+    } else {
+      setSummaryStats(null);
+    }
+  }, [videosToDisplay]);
 
   const handleDownloadCsvTemplate = () => {
     const csvContent = "link\n";
@@ -190,7 +222,6 @@ export default function YouTubeManagementPage() {
     
     const uniqueLinksFromInput = Array.from(new Set(linksFromInput.map(link => link.trim()).filter(Boolean)));
 
-
     if (uniqueLinksFromInput.length === 0) {
       toast({ title: "No Valid Links", description: "No valid YouTube links were found in your input to assign.", variant: "destructive" });
       setIsAssigning(false);
@@ -212,7 +243,7 @@ export default function YouTubeManagementPage() {
       if (fileInput) fileInput.value = '';
       
       if (selectedUserIdForAdmin) {
-        fetchAndDisplayUserVideos(selectedUserIdForAdmin); // Refresh videos for the currently selected user
+        fetchAndDisplayUserVideos(selectedUserIdForAdmin);
       }
     } else {
       toast({ title: "Assignment Failed", description: "Could not assign links to the user.", variant: "destructive" });
@@ -252,6 +283,15 @@ export default function YouTubeManagementPage() {
       reader.readAsText(file);
     });
   };
+
+  const StatCard: React.FC<{icon: React.ElementType, label: string, value: string | number}> = ({ icon: Icon, label, value }) => (
+    <div className="flex flex-col items-center justify-center p-4 bg-card rounded-lg shadow hover:shadow-md transition-shadow">
+      <Icon className="h-8 w-8 text-primary mb-2" />
+      <p className="text-xs text-muted-foreground uppercase tracking-wider">{label}</p>
+      <p className="text-2xl font-bold text-foreground">{typeof value === 'number' ? value.toLocaleString() : value}</p>
+    </div>
+  );
+
 
   return (
     <AppLayout>
@@ -349,6 +389,38 @@ export default function YouTubeManagementPage() {
             </CardFooter>
           </Card>
         )}
+
+        {isLoadingVideos && !summaryStats && (
+          <Card className="mb-6">
+            <CardHeader>
+              <Skeleton className="h-6 w-2/5 mb-2" />
+              <Skeleton className="h-4 w-1/3" />
+            </CardHeader>
+            <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <Skeleton className="h-28 w-full rounded-lg" />
+              <Skeleton className="h-28 w-full rounded-lg" />
+              <Skeleton className="h-28 w-full rounded-lg" />
+              <Skeleton className="h-28 w-full rounded-lg" />
+            </CardContent>
+          </Card>
+        )}
+
+        {!isLoadingVideos && summaryStats && (
+          <Card className="mb-6 shadow-md">
+            <CardHeader>
+              <CardTitle className="text-xl font-semibold">Performance Overview</CardTitle>
+              <CardDescription>
+                Summary for {user?.role === 'admin' && selectedUserIdForAdmin ? `${usersForAdminSelect.find(u=>u.id === selectedUserIdForAdmin)?.name || 'the selected user'}'s` : "your"} {summaryStats.totalVideos} video(s).
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-4">
+              <StatCard icon={ListVideo} label="Total Videos" value={summaryStats.totalVideos} />
+              <StatCard icon={Eye} label="Total Views" value={summaryStats.totalViews} />
+              <StatCard icon={ThumbsUp} label="Total Likes" value={summaryStats.totalLikes} />
+              <StatCard icon={MessageSquare} label="Total Comments" value={summaryStats.totalComments} />
+            </CardContent>
+          </Card>
+        )}
         
         <Card>
           <CardHeader>
@@ -379,7 +451,7 @@ export default function YouTubeManagementPage() {
             ) : videosToDisplay.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {videosToDisplay.map((video) => (
-                  <YouTubeCard key={video.id} video={video as YouTubeVideo} /> // Cast to YouTubeVideo as flow ensures structure
+                  <YouTubeCard key={video.id} video={video as YouTubeVideo} />
                 ))}
               </div>
             ) : (
@@ -404,3 +476,6 @@ export default function YouTubeManagementPage() {
     </AppLayout>
   );
 }
+
+
+    
