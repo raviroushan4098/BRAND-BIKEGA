@@ -13,13 +13,13 @@ import { Label } from '@/components/ui/label';
 import { useAuth } from '@/hooks/useAuth';
 import type { User } from '@/lib/authService';
 import { getAllUsers as apiGetAllUsers } from '@/lib/authService';
-import { assignYouTubeLinksToUser } from '@/lib/youtubeLinkService'; // Import the new service
+import { assignYouTubeLinksToUser } from '@/lib/youtubeLinkService';
 import { toast } from '@/hooks/use-toast';
-import { BarChart3, UserPlus, LinkIcon, FileText, UploadCloud, Users } from 'lucide-react';
+import { BarChart3, UserPlus, LinkIcon, FileText, UploadCloud, Users, DownloadCloud } from 'lucide-react';
 
 export default function YouTubeManagementPage() {
   const { user } = useAuth();
-  const videos: YouTubeVideo[] = mockYouTubeData; // Still using mock data for display
+  const videos: YouTubeVideo[] = mockYouTubeData; 
 
   const [users, setUsers] = useState<User[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string>('');
@@ -33,17 +33,33 @@ export default function YouTubeManagementPage() {
       setIsLoadingUsers(true);
       try {
         const fetchedUsers = await apiGetAllUsers();
-        setUsers(fetchedUsers.filter(u => u.id !== user.id)); // Exclude current admin from list
+        setUsers(fetchedUsers.filter(u => u.id !== user.id)); 
       } catch (error) {
         toast({ title: "Error Fetching Users", description: "Could not load user data.", variant: "destructive" });
       }
       setIsLoadingUsers(false);
     }
-  }, [user, toast]);
+  }, [user?.id, user?.role]);
 
   useEffect(() => {
     fetchUsers();
   }, [fetchUsers]);
+
+  const handleDownloadCsvTemplate = () => {
+    const csvContent = "link\n";
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    if (link.download !== undefined) { // Feature detection
+      const url = URL.createObjectURL(blob);
+      link.setAttribute("href", url);
+      link.setAttribute("download", "youtube_links_template.csv");
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }
+  };
 
   const handleAssignLinks = async () => {
     if (!selectedUserId) {
@@ -89,19 +105,17 @@ export default function YouTubeManagementPage() {
       return;
     }
     
-    // Ensure uniqueness of links being added now. The service will handle merging with existing.
     const uniqueNewLinks = Array.from(new Set(newLinks));
 
     const success = await assignYouTubeLinksToUser(selectedUserId, uniqueNewLinks);
 
     if (success) {
-      const targetUser = users.find(u => u.id === selectedUserId); // For toast message
+      const targetUser = users.find(u => u.id === selectedUserId); 
       toast({ title: "Links Assigned", description: `Successfully assigned ${uniqueNewLinks.length} new unique link(s) to ${targetUser?.name || 'the selected user'}.` });
       setSingleLink('');
       setCsvFile(null);
       const fileInput = document.getElementById('csv-upload') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
-      // Optionally, re-fetch links for the user if displaying them, but not users list unless it changed.
     } else {
       toast({ title: "Assignment Failed", description: "Could not assign links to the user in the 'youtube' collection.", variant: "destructive" });
     }
@@ -200,19 +214,25 @@ export default function YouTubeManagementPage() {
                 />
               </div>
 
-              <div className="relative">
-                <Label htmlFor="csv-upload" className="flex items-center mb-2">
+              <div className="space-y-2">
+                <Label htmlFor="csv-upload" className="flex items-center">
                   <FileText className="mr-2 h-4 w-4 text-muted-foreground" /> Or Upload CSV with Links
                 </Label>
-                <Input
-                  id="csv-upload"
-                  type="file"
-                  accept=".csv"
-                  onChange={(e) => setCsvFile(e.target.files ? e.target.files[0] : null)}
-                  className="w-full md:w-1/2 pt-2"
-                  disabled={isAssigning}
-                />
-                <p className="text-xs text-muted-foreground mt-1">CSV should contain one YouTube URL per line, or URLs in the first column.</p>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                    <Input
+                    id="csv-upload"
+                    type="file"
+                    accept=".csv"
+                    onChange={(e) => setCsvFile(e.target.files ? e.target.files[0] : null)}
+                    className="w-full md:w-1/2 pt-2"
+                    disabled={isAssigning}
+                    />
+                    <Button variant="outline" onClick={handleDownloadCsvTemplate} disabled={isAssigning} className="w-full sm:w-auto">
+                        <DownloadCloud className="mr-2 h-4 w-4" />
+                        Download Template
+                    </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">CSV should contain one YouTube URL per line, in a column with the header "link".</p>
               </div>
             </CardContent>
             <CardFooter>
@@ -242,3 +262,4 @@ export default function YouTubeManagementPage() {
     </AppLayout>
   );
 }
+
