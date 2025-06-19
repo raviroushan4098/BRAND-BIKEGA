@@ -42,6 +42,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [pathname, router]); // Add pathname and router to dependency array
 
   const login = async (email: string, password: string): Promise<boolean> => {
+    console.log(`Attempting login for email: '${email}'`); // Added for debugging
     setIsLoading(true);
     const loggedInUser = await apiLogin(email, password);
     if (loggedInUser) {
@@ -88,3 +89,4 @@ export const useAuth = (): AuthContextType => {
   }
   return context;
 };
+
