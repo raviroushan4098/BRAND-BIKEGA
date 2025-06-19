@@ -18,41 +18,53 @@ export interface User {
 // Fetch user profile from Firestore by email
 const fetchUserProfileByEmail = async (email: string): Promise<User | null> => {
   const usersRef = collection(db, 'users');
+  // Firestore queries are case-sensitive. Ensure email in DB matches query.
   const q = query(usersRef, where("email", "==", email), limit(1));
   const querySnapshot = await getDocs(q);
 
   if (querySnapshot.empty) {
+    console.log(`[AuthService-Debug] fetchUserProfileByEmail: No user found for email '${email}'`);
     return null;
   }
   const userDoc = querySnapshot.docs[0];
+  console.log(`[AuthService-Debug] fetchUserProfileByEmail: User found for email '${email}', ID: ${userDoc.id}`);
   return { id: userDoc.id, ...userDoc.data() } as User;
 };
 
 
 export const loginWithEmailPassword = async (email: string, passwordInput: string): Promise<User | null> => {
+  console.log(`[AuthService-Debug] Attempting direct Firestore login for email: '${email}' with input password: '${passwordInput}'`);
   try {
     const userProfile = await fetchUserProfileByEmail(email);
 
-    if (userProfile && userProfile.password === passwordInput) { // Plaintext password comparison - HIGHLY INSECURE
-      // Update lastLogin time
-      const userRef = doc(db, 'users', userProfile.id);
-      const lastLoginTime = new Date().toISOString();
-      await updateDoc(userRef, { lastLogin: lastLoginTime });
-      return { ...userProfile, lastLogin: lastLoginTime };
+    if (userProfile) {
+      // SECURITY WARNING: Logging stored password to console. REMOVE AFTER DEBUGGING.
+      console.log(`[AuthService-Debug] User profile found in Firestore for '${email}'. Stored password: '${userProfile.password}'`);
+      console.log(`[AuthService-Debug] Comparing input password '${passwordInput}' with stored password '${userProfile.password}'`);
+
+      if (userProfile.password === passwordInput) { // Plaintext password comparison - HIGHLY INSECURE
+        console.log("[AuthService-Debug] Passwords match. Updating lastLogin.");
+        const userRef = doc(db, 'users', userProfile.id);
+        const lastLoginTime = new Date().toISOString();
+        await updateDoc(userRef, { lastLogin: lastLoginTime });
+        return { ...userProfile, lastLogin: lastLoginTime };
+      } else {
+        console.error("[AuthService] Login failed: Passwords do not match. (Direct Firestore check)");
+        return null;
+      }
+    } else {
+      console.error(`[AuthService] Login failed: No user profile found in Firestore for email '${email}'. (Direct Firestore check)`);
+      return null;
     }
-    console.error("Login failed: Invalid email or password.");
-    return null;
   } catch (error) {
-    console.error("Error logging in with email/password:", error);
-    throw error;
+    console.error("[AuthService] Error during direct Firestore login attempt:", error);
+    throw error; // Re-throw to be caught by useAuth and then the login page
   }
 };
 
 // This function is no longer for Firebase Auth based current user,
 // but will be used by useAuth hook to check localStorage
 export const getCurrentUser = (callback: (user: User | null) => void): (() => void) => {
-  // Placeholder for custom session management if needed beyond useAuth's localStorage
-  // For this direct Firestore login, session is managed in useAuth.tsx
   const userString = localStorage.getItem('currentUser');
   if (userString) {
     try {
@@ -65,12 +77,10 @@ export const getCurrentUser = (callback: (user: User | null) => void): (() => vo
   } else {
     callback(null);
   }
-  // Return an empty unsubscribe function as there's no persistent listener like onAuthStateChanged
   return () => {};
 };
 
 export const logoutService = async (): Promise<void> => {
-  // No Firebase sign out needed. Session is cleared in useAuth.tsx
   localStorage.removeItem('currentUser');
 };
 
@@ -93,16 +103,15 @@ export const getAllUsers = async (): Promise<User[]> => {
 
 export const adminCreateUser = async (userData: Omit<User, 'id' | 'lastLogin'>): Promise<User | null> => {
   try {
-    // Check if user with this email already exists
     const existingUser = await fetchUserProfileByEmail(userData.email);
     if (existingUser) {
-      console.error('Error creating user: Email already exists.');
+      console.error('[AuthService] Error creating user profile: Email already exists in Firestore.');
       throw new Error('Email already exists.');
     }
 
-    const newUserId = doc(collection(db, 'users')).id;
+    const newUserId = doc(collection(db, 'users')).id; // Generate a new ID for Firestore
     const newUserProfile: User = {
-      id: newUserId,
+      id: newUserId, // Use the generated Firestore ID
       email: userData.email,
       password: userData.password, // Storing plaintext password - HIGHLY INSECURE
       name: userData.name,
@@ -110,26 +119,30 @@ export const adminCreateUser = async (userData: Omit<User, 'id' | 'lastLogin'>):
       lastLogin: new Date(0).toISOString(), // Indicates never logged in
       trackedChannels: userData.trackedChannels || { youtube: [], instagram: [] },
     };
+    // Store the new user profile in Firestore using the generated ID
     await setDoc(doc(db, 'users', newUserId), newUserProfile);
-    console.warn(`[ADMIN ACTION] Created user PROFILE in Firestore for ${userData.email} (ID: ${newUserId}). Password stored in plaintext.`);
+    console.warn(`[ADMIN ACTION] Created user PROFILE in Firestore for ${userData.email} (ID: ${newUserId}). Password stored in plaintext. This is INSECURE.`);
     return newUserProfile;
   } catch (error) {
-    console.error('Error creating user profile in Firestore (admin):', error);
-    return null;
+    console.error('[AuthService] Error creating user profile in Firestore (admin):', error);
+    // Do not return null directly, let the error propagate if it's thrown (e.g. email exists)
+    // If it's a different type of error, or if no error is thrown but something went wrong, then consider null.
+    // For now, re-throwing or letting specific errors propagate is better for the calling function to handle.
+    if (error instanceof Error && error.message === 'Email already exists.') {
+        throw error;
+    }
+    return null; // For other unexpected errors during Firestore operation
   }
 };
 
 export const adminUpdateUser = async (userId: string, userData: Partial<Omit<User, 'id' | 'email'>>): Promise<boolean> => {
   try {
     const userRef = doc(db, 'users', userId);
-    // If password is part of userData and is an empty string, don't update it (means user didn't want to change it)
-    // If password is provided and not empty, update it.
     const updateData = { ...userData };
     if ('password' in updateData && updateData.password === '') {
-      delete updateData.password; // Don't update password if it's an empty string from the form
+      delete updateData.password;
     } else if ('password' in updateData && updateData.password) {
-      // Password will be updated (plaintext)
-      console.warn(`[ADMIN ACTION] Updating password for user ${userId} in plaintext.`);
+      console.warn(`[ADMIN ACTION] Updating password for user ${userId} in plaintext (INSECURE).`);
     }
 
     await updateDoc(userRef, updateData);
@@ -152,7 +165,7 @@ export const adminDeleteUser = async (userId: string): Promise<boolean> => {
   }
 };
 
-// Deprecated OTP functions - kept for completeness but non-functional
+// Deprecated OTP functions
 export const requestOtp = async (email: string): Promise<boolean> => {
   console.warn("requestOtp is deprecated. Login is direct via Firestore (insecure).");
   return false;
