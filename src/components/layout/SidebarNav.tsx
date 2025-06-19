@@ -44,7 +44,7 @@ const SidebarNav = () => {
       <SidebarMenu className="flex-1">
         {navItems.map((item) => (
           <SidebarMenuItem key={item.href}>
-            <Link href={item.href} passHref legacyBehavior>
+            <Link href={item.href}>
               <SidebarMenuButton
                 isActive={pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))}
                 tooltip={item.label}
@@ -58,7 +58,7 @@ const SidebarNav = () => {
         ))}
         {user?.role === 'admin' && adminNavItems.map((item) => (
           <SidebarMenuItem key={item.href}>
-            <Link href={item.href} passHref legacyBehavior>
+            <Link href={item.href}>
               <SidebarMenuButton
                 isActive={pathname === item.href || pathname.startsWith(item.href)}
                 tooltip={item.label}
