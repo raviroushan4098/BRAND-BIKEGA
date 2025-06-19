@@ -1,10 +1,96 @@
 
+"use client";
+
+import React, { useState, useEffect, useCallback } from 'react';
 import AppLayout from '@/components/layout/AppLayout';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import ApiKeyTable from '@/components/admin/ApiKeyTable';
+import ApiKeyForm from '@/components/admin/ApiKeyForm';
 import { Button } from '@/components/ui/button';
-import { KeyRound, Settings2, BarChartHorizontalBig, AlertTriangle } from 'lucide-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { PlusCircle, KeyRound, RefreshCw, AlertTriangle } from 'lucide-react';
+import type { ApiKey } from '@/lib/apiKeyService';
+import {
+  getAllApiKeys as apiGetAllApiKeys,
+  addApiKey as apiAddApiKey,
+  updateApiKey as apiUpdateApiKey,
+  deleteApiKey as apiDeleteApiKey
+} from '@/lib/apiKeyService';
+import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth'; // To potentially associate keys with users
 
 export default function ApiManagementPage() {
+  const { user } = useAuth();
+  const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingApiKey, setEditingApiKey] = useState<ApiKey | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const { toast } = useToast();
+
+  const fetchApiKeys = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const fetchedKeys = await apiGetAllApiKeys();
+      setApiKeys(fetchedKeys);
+    } catch (error) {
+      toast({ title: "Error Fetching API Keys", description: "Could not load API key data.", variant: "destructive" });
+    }
+    setIsLoading(false);
+  }, [toast]);
+
+  useEffect(() => {
+    fetchApiKeys();
+  }, [fetchApiKeys]);
+
+  const handleAddKey = () => {
+    setEditingApiKey(null);
+    setIsFormOpen(true);
+  };
+
+  const handleEditKey = (apiKey: ApiKey) => {
+    setEditingApiKey(apiKey);
+    setIsFormOpen(true);
+  };
+
+  const handleDeleteKey = async (apiKeyId: string) => {
+    if (!window.confirm("Are you sure you want to delete this API key? This action cannot be undone.")) {
+      return;
+    }
+    setIsLoading(true);
+    const success = await apiDeleteApiKey(apiKeyId);
+    if (success) {
+      setApiKeys(prevKeys => prevKeys.filter(key => key.id !== apiKeyId));
+      toast({ title: "API Key Deleted", description: `API key has been removed.` });
+    } else {
+      toast({ title: "Error", description: "Failed to delete API key.", variant: "destructive" });
+    }
+    setIsLoading(false);
+  };
+
+  const handleSubmitKey = async (apiKeyData: Omit<ApiKey, 'id' | 'createdAt' | 'userId'>, currentApiKeyId?: string) => {
+    setIsLoading(true);
+    const payload = { ...apiKeyData, userId: user?.id }; // Associate key with current admin
+
+    if (currentApiKeyId) { // Editing existing key
+      const success = await apiUpdateApiKey(currentApiKeyId, payload);
+      if (success) {
+        await fetchApiKeys(); // Refetch to get updated list
+        toast({ title: "API Key Updated", description: `${apiKeyData.serviceName} key has been updated.` });
+      } else {
+        toast({ title: "Error", description: "Failed to update API key.", variant: "destructive" });
+      }
+    } else { // Adding new key
+      const newKey = await apiAddApiKey(payload);
+      if (newKey) {
+        await fetchApiKeys(); // Refetch to get new key in list
+        toast({ title: "API Key Added", description: `${newKey.serviceName} key has been added.` });
+      } else {
+        toast({ title: "Error", description: "Failed to add API key.", variant: "destructive" });
+      }
+    }
+    setIsLoading(false);
+    setIsFormOpen(false);
+  };
+
   return (
     <AppLayout adminOnly={true}>
       <div className="container mx-auto py-8 px-4 md:px-6">
@@ -13,81 +99,60 @@ export default function ApiManagementPage() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <KeyRound className="h-8 w-8 text-primary" />
-                <CardTitle className="text-3xl font-bold">API Management System</CardTitle>
+                <CardTitle className="text-3xl font-bold">API Key Management</CardTitle>
               </div>
-              {/* Placeholder for future actions like "Generate New Key" */}
-              {/* <Button size="lg" disabled>
-                <PlusCircle className="mr-2 h-5 w-5" /> Generate New API Key
-              </Button> */}
+              <div className="flex gap-2">
+                <Button onClick={fetchApiKeys} variant="outline" size="lg" disabled={isLoading}>
+                  <RefreshCw className={`mr-2 h-5 w-5 ${isLoading ? 'animate-spin' : ''}`} /> Refresh
+                </Button>
+                <Button onClick={handleAddKey} size="lg" disabled={isLoading}>
+                  <PlusCircle className="mr-2 h-5 w-5" /> Add New API Key
+                </Button>
+              </div>
             </div>
             <CardDescription>
-              Manage API keys, access controls, and usage quotas for external services or integrations.
+              Manage API keys for external services or integrations used by the application.
             </CardDescription>
           </CardHeader>
         </Card>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <Settings2 className="h-6 w-6 text-accent" />
-                <CardTitle>API Key Configuration</CardTitle>
+        <Alert variant="destructive" className="mb-6">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Important Security Notice</AlertTitle>
+          <AlertDescription>
+            API keys are sensitive credentials. They are stored directly in Firestore in this system.
+            For production environments, especially with high-privilege keys, using a dedicated secrets management service (e.g., Google Secret Manager, HashiCorp Vault) is strongly recommended for enhanced security.
+            Treat these keys like passwords and ensure Firestore security rules are appropriately configured.
+          </AlertDescription>
+        </Alert>
+
+        <Card>
+          <CardContent className="pt-6">
+            {isLoading && apiKeys.length === 0 ? (
+              <div className="text-center py-10">
+                <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-2 text-muted-foreground" />
+                <p className="text-muted-foreground">Loading API keys...</p>
               </div>
-              <CardDescription>View, generate, and revoke API keys.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground mb-4">
-                API keys are used to authenticate requests to your application's API endpoints.
-                Ensure keys are kept secure and rotated regularly.
-              </p>
-              <div className="p-4 border rounded-md bg-muted/50 text-center">
-                <p className="text-sm text-muted-foreground">API Key management interface will be here.</p>
-                <Button variant="outline" className="mt-4" disabled>
-                  Manage Keys (Coming Soon)
+            ) : apiKeys.length > 0 ? (
+              <ApiKeyTable apiKeys={apiKeys} onEditApiKey={handleEditKey} onDeleteApiKey={handleDeleteKey} isLoading={isLoading} />
+            ) : (
+              <div className="text-center py-10">
+                <p className="text-muted-foreground">No API keys found.</p>
+                <Button onClick={handleAddKey} className="mt-4" disabled={isLoading}>
+                  Add First API Key
                 </Button>
               </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <BarChartHorizontalBig className="h-6 w-6 text-secondary-foreground" />
-                <CardTitle>Usage & Quotas</CardTitle>
-              </div>
-              <CardDescription>Monitor API usage and set rate limits or quotas.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground mb-4">
-                Track API call volume and manage quotas to prevent abuse and ensure fair usage.
-              </p>
-              <div className="p-4 border rounded-md bg-muted/50 text-center">
-                <p className="text-sm text-muted-foreground">API usage monitoring and quota settings will be here.</p>
-                 <Button variant="outline" className="mt-4" disabled>
-                  View Usage (Coming Soon)
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        <Card className="mt-8">
-            <CardHeader>
-                <div className="flex items-center gap-3">
-                    <AlertTriangle className="h-6 w-6 text-destructive" />
-                    <CardTitle>Security Considerations</CardTitle>
-                </div>
-            </CardHeader>
-            <CardContent>
-                <ul className="list-disc list-inside space-y-2 text-sm text-muted-foreground">
-                    <li>API keys grant access to your application; treat them like passwords.</li>
-                    <li>Do not embed API keys directly in client-side code if they are sensitive.</li>
-                    <li>Implement proper authorization and authentication for all API endpoints.</li>
-                    <li>Regularly audit API key usage and permissions.</li>
-                </ul>
-            </CardContent>
+            )}
+          </CardContent>
         </Card>
 
+        <ApiKeyForm
+          isOpen={isFormOpen}
+          onOpenChange={setIsFormOpen}
+          onSubmitApiKey={handleSubmitKey}
+          initialData={editingApiKey}
+          isLoading={isLoading}
+        />
       </div>
     </AppLayout>
   );
