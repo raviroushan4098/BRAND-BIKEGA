@@ -9,57 +9,42 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from '@/hooks/use-toast';
-import { BotMessageSquare, Mail, KeyRound } from 'lucide-react';
+import { BotMessageSquare, Mail, KeyRound, Eye, EyeOff } from 'lucide-react';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
-  const [otp, setOtp] = useState('');
-  const [otpSent, setOtpSent] = useState(false);
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { login, verifyOtp, user, isLoading } = useAuth();
+  const { login, user, isLoading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (user) {
+    if (user && !isLoading) { // Ensure not loading before redirect
       router.replace('/dashboard');
     }
-  }, [user, router]);
+  }, [user, isLoading, router]);
 
-  const handleRequestOtp = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      const success = await login(email); // `login` here is actually `requestOtp`
-      if (success) {
-        setOtpSent(true);
-        toast({ title: 'OTP Sent', description: 'Check your email for the OTP (use 123456 for demo).' });
-      } else {
-        toast({ title: 'Error', description: 'Failed to send OTP. Please try again.', variant: 'destructive' });
-      }
-    } catch (error) {
-      toast({ title: 'Error', description: 'An unexpected error occurred.', variant: 'destructive' });
-    }
-    setIsSubmitting(false);
-  };
-
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    try {
-      const success = await verifyOtp(email, otp);
+      const success = await login(email, password);
       if (success) {
         toast({ title: 'Login Successful', description: 'Welcome back!' });
-        router.push('/dashboard');
+        // Router push is handled by AuthProvider effect or can be explicit here
+        // router.push('/dashboard'); 
       } else {
-        toast({ title: 'Invalid OTP', description: 'The OTP entered is incorrect. Please try again.', variant: 'destructive' });
+        toast({ title: 'Login Failed', description: 'Invalid email or password. Please try again.', variant: 'destructive' });
       }
     } catch (error) {
-      toast({ title: 'Error', description: 'An unexpected error occurred.', variant: 'destructive' });
+      console.error("Login page error:", error);
+      toast({ title: 'Error', description: 'An unexpected error occurred during login.', variant: 'destructive' });
     }
     setIsSubmitting(false);
   };
   
-  if (isLoading || user) { // Added user check to prevent brief flash of login form
+  if (isLoading || user) { 
     return <div className="flex items-center justify-center min-h-screen bg-background"><p>Loading...</p></div>;
   }
 
@@ -74,51 +59,59 @@ export default function LoginPage() {
           <CardDescription>Securely access your social media analytics.</CardDescription>
         </CardHeader>
         <CardContent>
-          {!otpSent ? (
-            <form onSubmit={handleRequestOtp} className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="email" className="flex items-center">
-                  <Mail className="mr-2 h-4 w-4 text-muted-foreground" /> Email Address
-                </Label>
+          <form onSubmit={handleLogin} className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="email" className="flex items-center">
+                <Mail className="mr-2 h-4 w-4 text-muted-foreground" /> Email Address
+              </Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                className="text-base"
+                autoComplete="email"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password" className="flex items-center">
+                <KeyRound className="mr-2 h-4 w-4 text-muted-foreground" /> Password
+              </Label>
+              <div className="relative">
                 <Input
-                  id="email"
-                  type="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="text-base"
+                  className="text-base pr-10"
+                  autoComplete="current-password"
                 />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
               </div>
-              <Button type="submit" className="w-full text-lg py-6" disabled={isSubmitting}>
-                {isSubmitting ? 'Sending OTP...' : 'Send OTP'}
+            </div>
+            <Button type="submit" className="w-full text-lg py-6" disabled={isSubmitting || isLoading}>
+              {isSubmitting ? 'Logging In...' : 'Login'}
+            </Button>
+            {/* Add forgot password link if needed */}
+            {/* <div className="text-center">
+              <Button variant="link" size="sm" asChild>
+                <Link href="/forgot-password">Forgot Password?</Link>
               </Button>
-            </form>
-          ) : (
-            <form onSubmit={handleVerifyOtp} className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="otp" className="flex items-center">
-                  <KeyRound className="mr-2 h-4 w-4 text-muted-foreground" /> One-Time Password
-                </Label>
-                <Input
-                  id="otp"
-                  type="text"
-                  placeholder="Enter 6-digit OTP (e.g., 123456)"
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value)}
-                  required
-                  maxLength={6}
-                  className="text-base tracking-widest text-center"
-                />
-              </div>
-              <Button type="submit" className="w-full text-lg py-6" disabled={isSubmitting}>
-                {isSubmitting ? 'Verifying...' : 'Verify OTP & Login'}
-              </Button>
-              <Button variant="link" onClick={() => setOtpSent(false)} className="w-full">
-                Request OTP again?
-              </Button>
-            </form>
-          )}
+            </div> */}
+          </form>
         </CardContent>
         <CardFooter className="text-center text-xs text-muted-foreground">
           <p>&copy; {new Date().getFullYear()} Insight Stream. All rights reserved.</p>

@@ -2,15 +2,20 @@
 "use client";
 
 import type { User } from '@/lib/authService';
-import { getCurrentUser as fetchCurrentUser, requestOtp as apiLogin, verifyOtp as apiVerifyOtp, logout as apiLogout } from '@/lib/authService';
+import { 
+  getCurrentUser as observeCurrentUser, 
+  loginWithEmailPassword as apiLogin, 
+  logoutService as apiLogout,
+  signUpWithEmailPassword as apiSignUp // Assuming we might need a way to create users
+} from '@/lib/authService';
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation'; // Added usePathname
 
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
-  login: (email: string) => Promise<boolean>;
-  verifyOtp: (email: string, otp: string) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<boolean>; // Updated signature
+  // signUp: (name: string, email: string, password: string) => Promise<boolean>; // Optional: if you want a signup flow
   logout: () => void;
 }
 
@@ -20,29 +25,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
+  const pathname = usePathname(); // Get current path
 
   useEffect(() => {
-    const initializeAuth = () => {
-      const currentUser = fetchCurrentUser();
+    setIsLoading(true);
+    const unsubscribe = observeCurrentUser((currentUser) => {
       setUser(currentUser);
       setIsLoading(false);
-    };
-    initializeAuth();
-  }, []);
+      if (!currentUser && pathname !== '/login') { // Redirect if not logged in and not on login page
+         // router.replace('/login'); // This caused issues with initial load, handled by HomePage now
+      } else if (currentUser && pathname === '/login') {
+        // router.replace('/dashboard'); // If logged in and on login page, redirect to dashboard
+      }
+    });
+    return () => unsubscribe(); // Cleanup subscription
+  }, [pathname, router]); // Add pathname and router to dependency array
 
-  const login = async (email: string): Promise<boolean> => {
+  const login = async (email: string, password: string): Promise<boolean> => {
     setIsLoading(true);
-    // In a real app, apiLogin might be requestOtp
-    const success = await apiLogin(email); // Assuming apiLogin is requestOtp
-    setIsLoading(false);
-    return success;
-  };
-
-  const verifyOtp = async (email: string, otp: string): Promise<boolean> => {
-    setIsLoading(true);
-    const verifiedUser = await apiVerifyOtp(email, otp);
-    if (verifiedUser) {
-      setUser(verifiedUser);
+    const loggedInUser = await apiLogin(email, password);
+    if (loggedInUser) {
+      setUser(loggedInUser); // setUser will be called by onAuthStateChanged, but this can make UI update faster
       setIsLoading(false);
       return true;
     }
@@ -50,14 +53,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return false;
   };
 
-  const logout = () => {
-    apiLogout();
-    setUser(null);
-    router.push('/login');
+  // Example signUp function if needed
+  // const signUp = async (name: string, email: string, password: string): Promise<boolean> => {
+  //   setIsLoading(true);
+  //   const signedUpUser = await apiSignUp(name, email, password);
+  //   if (signedUpUser) {
+  //     setUser(signedUpUser); // setUser will be called by onAuthStateChanged
+  //     setIsLoading(false);
+  //     return true;
+  //   }
+  //   setIsLoading(false);
+  //   return false;
+  // };
+
+  const logout = async () => {
+    setIsLoading(true);
+    await apiLogout();
+    setUser(null); // setUser will be called by onAuthStateChanged
+    router.push('/login'); // Explicitly redirect to login after logout
+    setIsLoading(false);
   };
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, verifyOtp, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
