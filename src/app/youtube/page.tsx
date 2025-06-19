@@ -50,7 +50,7 @@ export default function YouTubeManagementPage() {
         const fetchedUsers = await apiGetAllUsers();
         setUsersForAdminSelect(fetchedUsers.filter(u => u.id !== user.id)); 
       } catch (error) {
-        // Error toast already removed
+        // Error toast already handled by API service or general handler
       }
       setIsLoadingUsers(false);
     }
@@ -114,9 +114,13 @@ export default function YouTubeManagementPage() {
           setVideosToDisplay(result.videos);
         } catch (flowError: any) {
             console.error("Error fetching video details via flow:", flowError);
-            setFetchError(\`Failed to fetch video details: \${flowError.message || 'Unknown error'}. Ensure API key is valid.\`);
-            setVideosToDisplay(videoIds.map(id => ({ id, title: \`Video ID: \${id}\`, thumbnailUrl: \`https://placehold.co/320x180.png?text=\${id}\` })));
-            toast({ title: "Video Fetch Error", description: \`Could not load full video details. Displaying basic info. \${flowError.message}\`, variant: "destructive"});
+            const errorMessage = flowError.message || 'Unknown error';
+            const errorDetailsMsg = 'Failed to fetch video details: ' + errorMessage + '. Ensure API key is valid.';
+            setFetchError(errorDetailsMsg);
+            setVideosToDisplay(videoIds.map(id => ({ id, title: `Video ID: ${id}`, thumbnailUrl: `https://placehold.co/320x180.png?text=${id}` })));
+            
+            const toastDescription = 'Could not load full video details. Displaying basic info. ' + errorMessage;
+            toast({ title: "Video Fetch Error", description: toastDescription, variant: "destructive"});
         }
       } else {
         setVideosToDisplay([]);
@@ -167,7 +171,7 @@ export default function YouTubeManagementPage() {
   }, [videosToDisplay]);
 
   const handleDownloadCsvTemplate = () => {
-    const csvContent = "link\\n";
+    const csvContent = "link\n";
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     if (link.download !== undefined) {
@@ -233,9 +237,9 @@ export default function YouTubeManagementPage() {
     if (result.success) {
       const targetUser = usersForAdminSelect.find(u => u.id === selectedUserIdForAdmin);
       if (result.actuallyAddedCount > 0) {
-        toast({ title: "Links Assigned", description: \`Successfully assigned \${result.actuallyAddedCount} new unique link(s) to \${targetUser?.name || 'the selected user'}.\` });
+        toast({ title: "Links Assigned", description: `Successfully assigned ${result.actuallyAddedCount} new unique link(s) to ${targetUser?.name || 'the selected user'}.` });
       } else {
-        toast({ title: "Links Updated", description: \`No new unique links were added to \${targetUser?.name || 'the selected user'}. The list may have already contained these links.\` });
+        toast({ title: "Links Updated", description: `No new unique links were added to ${targetUser?.name || 'the selected user'}. The list may have already contained these links.` });
       }
       setSingleLink('');
       setCsvFile(null);
@@ -270,7 +274,7 @@ export default function YouTubeManagementPage() {
           resolve([]);
           return;
         }
-        let lines = text.split(/\\r\\n|\\n|\\r/).map(line => line.trim()).filter(Boolean); 
+        let lines = text.split(/\r\n|\n|\r/).map(line => line.trim()).filter(Boolean); 
         
         if (lines.length > 0 && lines[0].trim().toLowerCase() === 'link') {
           lines = lines.slice(1);
@@ -410,7 +414,7 @@ export default function YouTubeManagementPage() {
             <CardHeader>
               <CardTitle className="text-xl font-semibold">Performance Overview</CardTitle>
               <CardDescription>
-                Summary for {user?.role === 'admin' && selectedUserIdForAdmin ? \`\${usersForAdminSelect.find(u=>u.id === selectedUserIdForAdmin)?.name || 'the selected user'}'s\` : "your"} {summaryStats.totalVideos} video(s).
+                Summary for {user?.role === 'admin' && selectedUserIdForAdmin ? `${usersForAdminSelect.find(u=>u.id === selectedUserIdForAdmin)?.name || 'the selected user'}'s` : "your"} {summaryStats.totalVideos} video(s).
               </CardDescription>
             </CardHeader>
             <CardContent className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-4">
@@ -426,7 +430,7 @@ export default function YouTubeManagementPage() {
           <CardHeader>
             <CardTitle className="text-2xl">
               {user?.role === 'admin' 
-                ? (selectedUserIdForAdmin ? \`\${usersForAdminSelect.find(u=>u.id === selectedUserIdForAdmin)?.name || 'Selected User'}'s Videos\` : 'Select a User to View Videos')
+                ? (selectedUserIdForAdmin ? `${usersForAdminSelect.find(u=>u.id === selectedUserIdForAdmin)?.name || 'Selected User'}'s Videos` : 'Select a User to View Videos')
                 : "Your YouTube Videos"
               }
             </CardTitle>
@@ -436,9 +440,9 @@ export default function YouTubeManagementPage() {
                 : isLoadingVideos 
                   ? 'Loading video information...' 
                   : fetchError
-                    ? \`Error: \${fetchError}\`
+                    ? `Error: ${fetchError}`
                     : videosToDisplay.length > 0 
-                      ? \`Displaying \${videosToDisplay.length} video(s).\`
+                      ? `Displaying ${videosToDisplay.length} video(s).`
                       : (user?.role !== 'admin' ? 'You have no YouTube videos assigned yet.' : 'This user has no YouTube videos assigned, or links provided are invalid.')
               }
             </CardDescription>
@@ -477,7 +481,3 @@ export default function YouTubeManagementPage() {
   );
 }
 
-
-    
-
-    
