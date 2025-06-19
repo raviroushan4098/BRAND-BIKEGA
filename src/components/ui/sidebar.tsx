@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
-import { Sheet, SheetContent } from "@/components/ui/sheet"
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet" // Added SheetTitle
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   Tooltip,
@@ -165,8 +165,8 @@ const Sidebar = React.forwardRef<HTMLDivElement, SidebarExtendedProps>(
       collapsible = "offcanvas",
       className,
       children,
-      Rail, // Destructure Rail
-      ...rest // Use rest for other HTMLDivElement props
+      Rail, 
+      ...rest 
     },
     ref
   ) => {
@@ -180,7 +180,7 @@ const Sidebar = React.forwardRef<HTMLDivElement, SidebarExtendedProps>(
             className
           )}
           ref={ref}
-          {...rest} // Use rest here
+          {...rest} 
         >
           {children}
         </div>
@@ -189,7 +189,7 @@ const Sidebar = React.forwardRef<HTMLDivElement, SidebarExtendedProps>(
 
     if (isMobile) {
       return (
-        <Sheet open={openMobile} onOpenChange={setOpenMobile} {...rest}> {/* Use rest here */}
+        <Sheet open={openMobile} onOpenChange={setOpenMobile} {...rest}> 
           <SheetContent
             data-sidebar="sidebar"
             data-mobile="true"
@@ -201,9 +201,10 @@ const Sidebar = React.forwardRef<HTMLDivElement, SidebarExtendedProps>(
             }
             side={side}
           >
+            <SheetTitle className="sr-only">Main Menu</SheetTitle>
             <div className="flex h-full w-full flex-col">
               {children}
-              {Rail} {/* Render Rail for mobile sheet as well if needed, or conditionally */}
+              {Rail} 
             </div>
           </SheetContent>
         </Sheet>
@@ -218,7 +219,6 @@ const Sidebar = React.forwardRef<HTMLDivElement, SidebarExtendedProps>(
         data-collapsible={state === "collapsed" ? collapsible : ""}
         data-variant={variant}
         data-side={side}
-        // Do not spread ...rest or ...props on this outer div unless specifically needed for it
       >
         <div
           className={cn(
@@ -241,7 +241,7 @@ const Sidebar = React.forwardRef<HTMLDivElement, SidebarExtendedProps>(
               : "group-data-[collapsible=icon]:w-[--sidebar-width-icon] group-data-[side=left]:border-r group-data-[side=right]:border-l",
             className
           )}
-          {...rest} // Use rest here for the fixed container div
+          {...rest} 
         >
           <div
             data-sidebar="sidebar"
@@ -249,7 +249,7 @@ const Sidebar = React.forwardRef<HTMLDivElement, SidebarExtendedProps>(
           >
             {children}
           </div>
-          {Rail} {/* Render the Rail component, it will position itself */}
+          {Rail} 
         </div>
       </div>
     )
