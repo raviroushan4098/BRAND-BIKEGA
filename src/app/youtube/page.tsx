@@ -23,7 +23,7 @@ import {
 import { toast } from '@/hooks/use-toast';
 import {
   BarChart3, UserPlus, LinkIcon, FileText, UploadCloud, Users, DownloadCloud, Loader2, YoutubeIcon, Eye, ThumbsUp, MessageSquare, ListVideo,
-  CalendarIcon, ArrowUpDown, XCircle, FilterX, RefreshCw
+  CalendarIcon, ArrowUpDown, XCircle, FilterX, RefreshCw, Download
 } from 'lucide-react';
 import { Skeleton } from "@/components/ui/skeleton";
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -118,9 +118,6 @@ export default function YouTubeManagementPage() {
         setAllFetchedVideos(storedVideos);
       } else {
         setAllFetchedVideos([]);
-        // Optionally, you could auto-trigger handleRefreshFeed here if no data,
-        // or inform the user to click refresh.
-        // For now, we'll let the user initiate the first fetch if Firestore is empty.
       }
     } catch (error: any) {
       console.error("Error loading videos from Firestore:", error);
@@ -131,7 +128,6 @@ export default function YouTubeManagementPage() {
     setIsLoadingVideos(false);
   }, []);
 
-  // Effect for initial load from Firestore
   useEffect(() => {
     const targetUserId = user?.role === 'admin' && selectedUserIdForAdmin ? selectedUserIdForAdmin : user?.id;
     if (targetUserId) {
@@ -139,12 +135,11 @@ export default function YouTubeManagementPage() {
     } else {
       setAllFetchedVideos([]);
       setFetchError(null);
-      setIsLoadingVideos(false); // Ensure loading stops if no target user
+      setIsLoadingVideos(false); 
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, selectedUserIdForAdmin]); // loadInitialUserVideos is stable due to useCallback
+  }, [user, selectedUserIdForAdmin]);
 
-  // Effect for filtering and sorting based on allFetchedVideos
   useEffect(() => {
     let processedVideos = [...allFetchedVideos];
     if (dateRange.from || dateRange.to) {
@@ -184,7 +179,6 @@ export default function YouTubeManagementPage() {
     setVideosToDisplay(processedVideos);
   }, [allFetchedVideos, dateRange, sortConfig]);
 
-  // Effect for summary stats
   useEffect(() => {
     if (videosToDisplay.length > 0) {
       const newSummaryStats: SummaryStats = videosToDisplay.reduce(
@@ -217,7 +211,7 @@ export default function YouTubeManagementPage() {
     try {
       const links = await getYouTubeLinksForUser(targetUserId);
       if (links.length === 0) {
-        setAllFetchedVideos([]); // Clear videos if no links assigned
+        setAllFetchedVideos([]); 
         toast({ title: "No Links", description: "No YouTube links are assigned to this user.", variant: "default" });
         setIsRefreshing(false);
         return;
@@ -231,7 +225,6 @@ export default function YouTubeManagementPage() {
         return;
       }
 
-      // Step 1: Fetch all video details from YouTube API
       const apiResult = await fetchYouTubeDetails({ videoIds });
       const fetchedVideosFromAPI = apiResult.videos;
 
@@ -241,7 +234,6 @@ export default function YouTubeManagementPage() {
         return;
       }
       
-      // Step 2: Save/Update each video in Firestore sequentially and update progress
       const updatedVideosForState: Partial<YouTubeVideo>[] = [];
       for (let i = 0; i < fetchedVideosFromAPI.length; i++) {
         const videoData = fetchedVideosFromAPI[i];
@@ -252,7 +244,7 @@ export default function YouTubeManagementPage() {
         setRefreshProgress(((i + 1) / fetchedVideosFromAPI.length) * 100);
       }
 
-      setAllFetchedVideos(updatedVideosForState); // Update main video list with fresh data
+      setAllFetchedVideos(updatedVideosForState); 
       toast({ title: "Feed Refreshed", description: `Successfully updated ${updatedVideosForState.length} videos.` });
 
     } catch (error: any) {
@@ -326,7 +318,7 @@ export default function YouTubeManagementPage() {
       setSingleLink(''); setCsvFile(null);
       const fileInput = document.getElementById('csv-upload') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
-      await handleRefreshFeed(); // Refresh feed for the user whose links were just updated
+      await handleRefreshFeed(); 
     } else {
       toast({ title: "Assignment Failed", description: "Could not assign links.", variant: "destructive" });
     }
@@ -366,6 +358,56 @@ export default function YouTubeManagementPage() {
       <p className="text-2xl font-bold text-foreground">{typeof value === 'number' ? value.toLocaleString() : value}</p>
     </div>
   );
+
+  const escapeCsvCell = (cellData: string | number | undefined | null): string => {
+    if (cellData === undefined || cellData === null) {
+        return '';
+    }
+    const stringData = String(cellData);
+    // If the string contains a comma, newline, or double quote, enclose it in double quotes
+    // and escape any existing double quotes by doubling them (e.g., " becomes "")
+    if (stringData.includes(',') || stringData.includes('\n') || stringData.includes('"')) {
+        return `"${stringData.replace(/"/g, '""')}"`;
+    }
+    return stringData;
+  };
+
+  const handleDownloadVideoListCsv = () => {
+    if (videosToDisplay.length === 0) {
+      toast({ title: "No Data", description: "There are no videos to download.", variant: "default" });
+      return;
+    }
+
+    const headers = ["Video ID", "Title", "Published Date", "Views", "Likes", "Comments", "Thumbnail URL"];
+    const csvRows = [
+      headers.join(','),
+      ...videosToDisplay.map(video => [
+        escapeCsvCell(video.id),
+        escapeCsvCell(video.title),
+        escapeCsvCell(video.publishedAt ? format(new Date(video.publishedAt), "yyyy-MM-dd HH:mm:ss") : 'N/A'),
+        escapeCsvCell(video.views),
+        escapeCsvCell(video.likes),
+        escapeCsvCell(video.comments),
+        escapeCsvCell(video.thumbnailUrl)
+      ].join(','))
+    ];
+    const csvContent = csvRows.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob);
+      const fileName = `youtube_videos_list_${new Date().toISOString().split('T')[0]}.csv`;
+      link.setAttribute("href", url);
+      link.setAttribute("download", fileName);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast({ title: "Download Started", description: `Downloading ${fileName}`});
+    }
+  };
+
 
   return (
     <AppLayout>
@@ -508,18 +550,24 @@ export default function YouTubeManagementPage() {
         )}
         
         <Card>
-          <CardHeader>
-            <CardTitle className="text-2xl">
-              {user?.role === 'admin' ? (selectedUserIdForAdmin ? `${usersForAdminSelect.find(u=>u.id === selectedUserIdForAdmin)?.name || 'Selected User'}'s Videos` : 'Select a User to View Videos') : "Your YouTube Videos" }
-            </CardTitle>
-            <CardDescription>
-              {user?.role === 'admin' && !selectedUserIdForAdmin ? 'Please select a user from the dropdown above to see their videos.'
-                : isLoadingVideos && !isRefreshing ? 'Loading video information from storage...' 
-                : fetchError ? `Error: ${fetchError}`
-                : videosToDisplay.length > 0 ? `Displaying ${videosToDisplay.length} of ${allFetchedVideos.length} video(s). Sorted by ${sortConfig.key} (${sortConfig.order}).`
-                : (user?.role !== 'admin' ? 'You have no YouTube videos stored. Try refreshing the feed.' : 'This user has no YouTube videos stored, or links provided are invalid, or they are filtered out. Try refreshing the feed.')
-              }
-            </CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-2xl">
+                {user?.role === 'admin' ? (selectedUserIdForAdmin ? `${usersForAdminSelect.find(u=>u.id === selectedUserIdForAdmin)?.name || 'Selected User'}'s Videos` : 'Select a User to View Videos') : "Your YouTube Videos" }
+              </CardTitle>
+              <CardDescription>
+                {user?.role === 'admin' && !selectedUserIdForAdmin ? 'Please select a user from the dropdown above to see their videos.'
+                  : isLoadingVideos && !isRefreshing ? 'Loading video information from storage...' 
+                  : fetchError ? `Error: ${fetchError}`
+                  : videosToDisplay.length > 0 ? `Displaying ${videosToDisplay.length} of ${allFetchedVideos.length} video(s). Sorted by ${sortConfig.key} (${sortConfig.order}).`
+                  : (user?.role !== 'admin' ? 'You have no YouTube videos stored. Try refreshing the feed.' : 'This user has no YouTube videos stored, or links provided are invalid, or they are filtered out. Try refreshing the feed.')
+                }
+              </CardDescription>
+            </div>
+            <Button onClick={handleDownloadVideoListCsv} variant="outline" size="sm" disabled={videosToDisplay.length === 0 || isRefreshing || isLoadingVideos}>
+              <Download className="mr-2 h-4 w-4" />
+              Download List (CSV)
+            </Button>
           </CardHeader>
           <CardContent>
             {(isLoadingVideos && !isRefreshing) ? ( <div className="flex justify-center items-center py-10"> <Loader2 className="h-12 w-12 animate-spin text-primary" /> </div> ) 
