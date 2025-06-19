@@ -15,6 +15,7 @@ import type { User } from '@/lib/authService';
 import { getAllUsers as apiGetAllUsers } from '@/lib/authService';
 import { assignYouTubeLinksToUser, getYouTubeLinksForUser } from '@/lib/youtubeLinkService';
 import { fetchYouTubeDetails } from '@/ai/flows/fetch-youtube-details-flow';
+import { generateChannelAnalyticsReport, type ChannelAnalyticsReportOutput, type YouTubeVideoForReport } from '@/ai/flows/generate-channel-analytics-report-flow'; // Import channel report flow
 import {
   saveVideoAnalytics,
   getAllVideoAnalyticsForUser,
@@ -23,13 +24,14 @@ import {
 import { toast } from '@/hooks/use-toast';
 import {
   BarChart3, UserPlus, LinkIcon, FileText, UploadCloud, Users, DownloadCloud, Loader2, YoutubeIcon, Eye, ThumbsUp, MessageSquare, ListVideo,
-  CalendarIcon, ArrowUpDown, XCircle, FilterX, RefreshCw
+  CalendarIcon, ArrowUpDown, XCircle, FilterX, RefreshCw, FileSpreadsheet // Added FileSpreadsheet for PPT download
 } from 'lucide-react';
 import { Skeleton } from "@/components/ui/skeleton";
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Progress } from '@/components/ui/progress';
 import { format, isValid as isValidDate } from 'date-fns';
+import PptxGenJS from 'pptxgenjs'; // Import PptxGenJS
 
 interface SummaryStats {
   totalVideos: number;
@@ -54,7 +56,7 @@ export default function YouTubeManagementPage() {
 
   const [allFetchedVideos, setAllFetchedVideos] = useState<Partial<YouTubeVideo>[]>([]);
   const [videosToDisplay, setVideosToDisplay] = useState<Partial<YouTubeVideo>[]>([]);
-  const [isLoadingVideos, setIsLoadingVideos] = useState(true); // Start true for initial load
+  const [isLoadingVideos, setIsLoadingVideos] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [summaryStats, setSummaryStats] = useState<SummaryStats | null>(null);
 
@@ -63,6 +65,8 @@ export default function YouTubeManagementPage() {
 
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshProgress, setRefreshProgress] = useState(0);
+
+  const [isGeneratingChannelReport, setIsGeneratingChannelReport] = useState(false); // State for PPT report generation
 
   const fetchUsersForAdmin = useCallback(async () => {
     if (user?.role === 'admin') {
@@ -359,6 +363,103 @@ export default function YouTubeManagementPage() {
     </div>
   );
 
+  const handleDownloadChannelReportPpt = async () => {
+    if (videosToDisplay.length === 0) {
+      toast({ title: "No Videos", description: "Cannot generate a report for an empty video list.", variant: "destructive" });
+      return;
+    }
+    setIsGeneratingChannelReport(true);
+    toast({ title: "Generating Report", description: "AI is preparing your channel report. This may take a moment..." });
+
+    try {
+      const videosForReport: YouTubeVideoForReport[] = videosToDisplay.map(v => ({
+        id: v.id || 'unknown',
+        title: v.title || 'Untitled',
+        description: v.description || '',
+        thumbnailUrl: v.thumbnailUrl || 'https://placehold.co/320x180.png',
+        views: v.views || 0,
+        likes: v.likes || 0,
+        comments: v.comments || 0,
+        publishedAt: v.publishedAt || new Date(0).toISOString(),
+      }));
+
+      let filterContextString = "Videos shown: " + (videosToDisplay.length === allFetchedVideos.length ? "All" : "Filtered list");
+      if (dateRange.from || dateRange.to) {
+        filterContextString += `. Filtered by date: ${dateRange.from ? format(dateRange.from, 'MMM d, yyyy') : 'Any'} - ${dateRange.to ? format(dateRange.to, 'MMM d, yyyy') : 'Any'}`;
+      }
+      filterContextString += `. Sorted by ${sortConfig.key} (${sortConfig.order}).`;
+
+      const reportOutput = await generateChannelAnalyticsReport({ videos: videosForReport, filterContext: filterContextString });
+
+      if (!reportOutput) {
+        throw new Error("AI model did not return a report.");
+      }
+      
+      // PPT Generation Logic (adapted from ChannelAnalyticsReportDisplay)
+      const pptx = new PptxGenJS();
+      pptx.layout = "LAYOUT_WIDE";
+      const primaryColor = "3F51B5";
+      const accentColor = "9C27B0";
+      const textColor = "212121";
+      const slideBackgroundColor = "FFFFFF";
+
+      pptx.defineSlideMaster({
+        title: "MASTER_SLIDE",
+        background: { color: slideBackgroundColor },
+        objects: [
+          { rect: { x: 0, y: 0, w: "100%", h: 0.75, fill: { color: primaryColor } } },
+          { text: { text: "Insight Stream Analytics", options: { x: 0.5, y: 0.15, w: 5, h: 0.5, color: "FFFFFF", fontSize: 18 } } },
+        ],
+      });
+      
+      const addContentSlide = (slideTitle: string, content?: PptxGenJS.TextProps[] | string) => {
+        const slide = pptx.addSlide({ masterName: "MASTER_SLIDE" });
+        slide.addText(slideTitle, { x: 0.5, y: 1.0, w: "90%", h: 0.5, fontSize: 28, bold: true, color: primaryColor });
+        if (content && Array.isArray(content) && content.length > 0) {
+           slide.addText(content, { x: 0.5, y: 1.75, w: "90%", h: 4.5, fontSize: 12, color: textColor, bullet: {type: 'bullet'} });
+        } else if (typeof content === 'string') {
+           slide.addText(content, { x: 0.5, y: 1.75, w: "90%", h: 4.5, fontSize: 12, color: textColor });
+        }
+        return slide;
+      };
+
+      const titleSlide = pptx.addSlide({ masterName: "MASTER_SLIDE" });
+      titleSlide.addText(reportOutput.reportTitle || "Channel Analytics Report", { x: 0.5, y: 2.5, w: '90%', h: 1.5, fontSize: 44, bold: true, color: primaryColor, align: 'center' });
+      titleSlide.addText(`Generated on: ${new Date().toLocaleDateString()}`, { x: 0.5, y: 4.0, w: '90%', h: 0.5, fontSize: 16, color: textColor, align: 'center' });
+
+      addContentSlide("Overall Performance Summary", [{text: reportOutput.overallPerformanceSummary, options: {fontSize: 16}}]);
+      if (reportOutput.keyObservations && reportOutput.keyObservations.length > 0) addContentSlide("Key Observations", reportOutput.keyObservations.map(obs => ({ text: obs, options: { breakLine: true, fontSize: 14 } })));
+      
+      if (reportOutput.topPerformingVideos && reportOutput.topPerformingVideos.length > 0) {
+        const topVideosSlide = pptx.addSlide({ masterName: "MASTER_SLIDE" });
+        topVideosSlide.addText("Top Performing Videos", { x: 0.5, y: 1.0, w: "90%", h: 0.5, fontSize: 28, bold: true, color: primaryColor });
+        let yPos = 1.75;
+        reportOutput.topPerformingVideos.forEach((video, index) => {
+          topVideosSlide.addText(`${index + 1}. ${video.title}`, { x: 0.5, y: yPos, w: "90%", h: 0.3, fontSize: 16, bold: true, color: accentColor, hyperlink: { url: `https://www.youtube.com/watch?v=${video.id}`, tooltip: "Watch Video" } }); yPos += 0.35;
+          topVideosSlide.addText(`Views: ${video.views.toLocaleString()} | Likes: ${video.likes.toLocaleString()} | Comments: ${video.comments.toLocaleString()}`, { x: 0.7, y: yPos, w: "85%", h: 0.25, fontSize: 12, color: textColor }); yPos += 0.25;
+          if (video.reason) { topVideosSlide.addText(`Reason: ${video.reason}`, { x: 0.7, y: yPos, w: "85%", h: 0.25, fontSize: 12, italic: true, color: textColor }); yPos += 0.25; }
+          yPos += 0.2;
+        });
+      }
+      if (reportOutput.areasForImprovement && reportOutput.areasForImprovement.length > 0) addContentSlide("Areas for Improvement", reportOutput.areasForImprovement.map(area => ({ text: area, options: { breakLine: true, fontSize: 14 } })));
+      if (reportOutput.actionableSuggestions && reportOutput.actionableSuggestions.length > 0) addContentSlide("Actionable Suggestions", reportOutput.actionableSuggestions.map(suggestion => ({ text: suggestion, options: { breakLine: true, fontSize: 14 } })));
+
+      const endSlide = pptx.addSlide({ masterName: "MASTER_SLIDE" });
+      endSlide.addText("Thank You", { x:0.5, y:2.5, w:'90%', h:1, fontSize:40, bold:true, color:primaryColor, align:'center'});
+      endSlide.addText("Report generated by Insight Stream", { x:0.5, y:3.5, w:'90%', h:0.5, fontSize:14, color:textColor, align:'center'});
+
+      const reportTitleForFile = reportOutput.reportTitle ? reportOutput.reportTitle.replace(/[^a-z0-9_]/gi, '_').toLowerCase() : 'channel_analytics_report';
+      pptx.writeFile({ fileName: `${reportTitleForFile}.pptx` });
+      toast({ title: "Report Downloaded", description: "Channel analytics PPT has been generated." });
+
+    } catch (err: any) {
+      console.error("Error generating or downloading channel report:", err);
+      toast({ title: "Report Generation Failed", description: err.message || "Could not generate the PPT report.", variant: "destructive" });
+    } finally {
+      setIsGeneratingChannelReport(false);
+    }
+  };
+
 
   return (
     <AppLayout>
@@ -485,7 +586,7 @@ export default function YouTubeManagementPage() {
                   <CardTitle className="text-xl font-semibold">Performance Overview</CardTitle>
                   <CardDescription> Summary for {user?.role === 'admin' && selectedUserIdForAdmin ? `${usersForAdminSelect.find(u=>u.id === selectedUserIdForAdmin)?.name || 'the selected user'}'s` : "your"} {summaryStats.totalVideos} video(s) { (dateRange.from || dateRange.to) ? "(filtered)" : ""}. </CardDescription>
                 </div>
-                <Button onClick={handleRefreshFeed} disabled={isRefreshing || isLoadingVideos} variant="outline" size="sm">
+                <Button onClick={handleRefreshFeed} disabled={isRefreshing || isLoadingVideos || isGeneratingChannelReport} variant="outline" size="sm">
                   <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
                   {isRefreshing ? 'Refreshing...' : 'Refresh Feed'}
                 </Button>
@@ -515,7 +616,15 @@ export default function YouTubeManagementPage() {
                 }
               </CardDescription>
             </div>
-            {/* Removed Download List (CSV) button from here */}
+            <Button 
+              onClick={handleDownloadChannelReportPpt} 
+              disabled={isGeneratingChannelReport || isLoadingVideos || videosToDisplay.length === 0} 
+              variant="outline"
+              size="sm"
+            >
+              {isGeneratingChannelReport ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileSpreadsheet className="mr-2 h-4 w-4" />}
+              {isGeneratingChannelReport ? 'Generating...' : 'Download Report (PPT)'}
+            </Button>
           </CardHeader>
           <CardContent>
             {(isLoadingVideos && !isRefreshing) ? ( <div className="flex justify-center items-center py-10"> <Loader2 className="h-12 w-12 animate-spin text-primary" /> </div> ) 
@@ -533,3 +642,4 @@ export default function YouTubeManagementPage() {
     </AppLayout>
   );
 }
+
