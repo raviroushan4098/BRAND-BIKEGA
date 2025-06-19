@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from '@/hooks/use-toast';
-import { BotMessageSquare, Mail, KeyRound, Eye, EyeOff } from 'lucide-react';
+import { BotMessageSquare, Mail, KeyRound, Eye, EyeOff, AlertTriangle } from 'lucide-react';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -20,7 +20,7 @@ export default function LoginPage() {
   const router = useRouter();
 
   useEffect(() => {
-    if (user && !isLoading) { 
+    if (user && !isLoading) {
       router.replace('/dashboard');
     }
   }, [user, isLoading, router]);
@@ -32,24 +32,35 @@ export default function LoginPage() {
       const success = await login(email, password);
       if (success) {
         toast({ title: 'Login Successful', description: 'Welcome back!' });
-        // Router push is handled by AuthProvider effect or can be explicit here
-        // router.push('/dashboard'); 
+        // Router push/replace is handled by AuthProvider or useEffect above
       } else {
-        toast({ 
-          title: 'Login Failed', 
-          description: 'Invalid email or password. Please double-check your credentials and ensure the user exists in Firebase Authentication.', 
-          variant: 'destructive' 
+        // This 'else' block might not be hit if login function always throws on failure.
+        // Specific error handling is in the catch block.
+        toast({
+          title: 'Login Failed',
+          description: 'Please check your credentials. Ensure the user exists in Firebase Authentication (Users tab) and the password is correct.',
+          variant: 'destructive'
         });
       }
-    } catch (error) {
-      console.error("Login page error:", error);
-      toast({ title: 'Error', description: 'An unexpected error occurred during login. Check console for details.', variant: 'destructive' });
+    } catch (error: any) {
+      console.error("Login page error:", error.code, error.message);
+      let description = 'An unexpected error occurred during login.';
+      if (error.code === 'auth/invalid-credential' || error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found') {
+        description = 'Invalid email or password. Please ensure the account exists in Firebase Authentication (Users tab in Firebase Console) and your credentials are correct.';
+      } else if (error.code) {
+        description = `Error: ${error.message} (Code: ${error.code})`;
+      }
+      toast({ title: 'Login Failed', description, variant: 'destructive' });
     }
     setIsSubmitting(false);
   };
-  
-  if (isLoading || user) { 
-    return <div className="flex items-center justify-center min-h-screen bg-background"><p>Loading...</p></div>;
+
+  if (isLoading || (user && !isLoading)) { // Prevent flash of login page if user is already loaded
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <p>Loading...</p>
+      </div>
+    );
   }
 
   return (

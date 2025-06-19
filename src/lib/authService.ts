@@ -60,19 +60,19 @@ export const loginWithEmailPassword = async (email: string, password: string): P
     const firebaseUser = userCredential.user;
     
     // After successful Firebase Authentication, fetch/create the user's profile from Firestore.
+    // This ensures user data (like role, name etc.) is available in the app.
     const userProfile = await fetchUserProfile(firebaseUser);
     
     if (userProfile) {
-      // Ensure lastLogin is updated in Firestore if it was fetched (fetchUserProfile handles this)
-      // and return the comprehensive user profile.
       return { ...userProfile, lastLogin: firebaseUser.metadata.lastSignInTime || new Date().toISOString() };
     }
+    // This case should ideally not be hit if fetchUserProfile always creates a profile.
+    // However, returning null if profile somehow isn't available.
+    console.error("Login successful but user profile could not be fetched or created in Firestore.");
     return null; 
   } catch (error) {
     console.error("Error logging in with email/password:", error);
-    // Ensure the error is re-thrown or handled appropriately if needed by the caller
-    // For now, returning null indicates failure to the caller (useAuth hook)
-    throw error; // Re-throwing allows the caller to catch Firebase specific errors if needed
+    throw error; 
   }
 };
 
@@ -127,25 +127,20 @@ export const getAllUsers = async (): Promise<User[]> => {
   }
 };
 
-// Admin creates a user profile in Firestore.
-// IMPORTANT: This function DOES NOT create a Firebase Authentication user.
-// The admin must create the auth user in the Firebase Console for them to be able to log in.
 export const adminCreateUser = async (userData: Omit<User, 'id' | 'lastLogin' > & {password?: string}): Promise<User | null> => {
   try {
-    // This ID will be for the Firestore document. For this prototype, we ensure it's unique.
-    // A more robust system might require the admin to provide the Firebase Auth UID if the Auth user is created first.
-    const newUserId = doc(collection(db, 'users')).id; 
+    const newUserId = doc(collection(db, 'users')).id; // Generate a new unique ID for Firestore document
     
     const newUserProfile: User = {
       id: newUserId, 
       email: userData.email,
       name: userData.name,
       role: userData.role,
-      lastLogin: new Date(0).toISOString(), // Indicates never logged in or unknown default
+      lastLogin: new Date(0).toISOString(), // Indicates never logged in or placeholder
       trackedChannels: userData.trackedChannels || { youtube: [], instagram: [] },
     };
     await setDoc(doc(db, 'users', newUserId), newUserProfile);
-    // The userData.password is from the form but NOT used here to create an Auth record.
+    console.warn(`[ADMIN ACTION] Created user PROFILE in Firestore for ${userData.email} (ID: ${newUserId}). IMPORTANT: This does NOT create a Firebase Authentication account. The user cannot log in until an auth account is created manually in the Firebase Console.`);
     return newUserProfile;
   } catch (error) {
     console.error('Error creating user profile in Firestore (admin):', error);
@@ -165,12 +160,10 @@ export const adminUpdateUser = async (userId: string, userData: Partial<Omit<Use
 };
 
 export const adminDeleteUser = async (userId: string): Promise<boolean> => {
-  // This function only deletes the Firestore user profile.
-  // Firebase Auth user record is NOT deleted here. Admin must do this manually in Firebase Console.
   try {
     const userRef = doc(db, 'users', userId);
     await deleteDoc(userRef);
-    console.warn(`User profile ${userId} deleted from Firestore. Auth user NOT deleted.`);
+    console.warn(`[ADMIN ACTION] User profile ${userId} deleted from Firestore. IMPORTANT: This does NOT delete their Firebase Authentication record.`);
     return true;
   } catch (error) {
     console.error("Error deleting user profile (admin):", error);
@@ -178,7 +171,7 @@ export const adminDeleteUser = async (userId: string): Promise<boolean> => {
   }
 };
 
-// Deprecated OTP functions (can be removed if no longer needed)
+// Deprecated OTP functions
 export const requestOtp = async (email: string): Promise<boolean> => {
   console.warn("requestOtp is deprecated. Use email/password authentication.");
   return false;
