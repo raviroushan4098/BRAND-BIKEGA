@@ -9,9 +9,9 @@
  */
 
 import { ai } from '@/ai/genkit';
-import { z } from 'genkit/zod';
+import { z } from 'zod'; // Changed from 'genkit/zod'
 import { getVideoStatistics } from '@/lib/youtubeApiService';
-import type { YouTubeVideo } from '@/lib/mockData'; // Using for structure, though shares will be omitted
+import type { YouTubeVideo } from '@/lib/mockData'; // Using for structure
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query, where, limit } from 'firebase/firestore';
 
@@ -19,10 +19,9 @@ const YouTubeVideoSchema = z.object({
   id: z.string(),
   title: z.string(),
   thumbnailUrl: z.string(),
-  views: z.number(),
-  likes: z.number(),
-  comments: z.number(),
-  // Shares is intentionally omitted as it's not reliably fetched from the YouTube Data API v3 videos endpoint
+  views: z.number().optional().default(0), // Made optional with default for robustness
+  likes: z.number().optional().default(0),
+  comments: z.number().optional().default(0),
 });
 
 export const FetchYouTubeDetailsInputSchema = z.object({
@@ -42,18 +41,19 @@ async function getYouTubeApiKeyFromFirestore(): Promise<string | null> {
     const q = query(keysRef, where('serviceName', '==', 'youtube'), limit(1));
     const snapshot = await getDocs(q);
     if (snapshot.empty) {
-      console.error("YouTube API key not found in Firestore.");
+      console.warn("YouTube API key not found in Firestore.");
       return null;
     }
     const apiKeyData = snapshot.docs[0].data();
     if (!apiKeyData.keyValue) {
-        console.error("YouTube API key value is missing in Firestore document.");
+        console.warn("YouTube API key value is missing in Firestore document.");
         return null;
     }
     return apiKeyData.keyValue as string;
   } catch (error) {
     console.error("Error fetching YouTube API key from Firestore:", error);
-    throw error; // Re-throw to be caught by the flow
+    // Do not throw here, let the flow handle the null key
+    return null;
   }
 }
 
@@ -70,6 +70,8 @@ const fetchYouTubeDetailsFlow = ai.defineFlow(
   async ({ videoIds }) => {
     const apiKey = await getYouTubeApiKeyFromFirestore();
     if (!apiKey) {
+      // If API key is critical and not found, throw an error or return empty videos
+      // For now, let's throw an error so the calling function knows.
       throw new Error('YouTube API key is not configured or could not be retrieved.');
     }
 
@@ -79,8 +81,9 @@ const fetchYouTubeDetailsFlow = ai.defineFlow(
     
     const validatedVideos: z.infer<typeof YouTubeVideoSchema>[] = [];
     for (const videoData of fetchedVideosData) {
+        // Ensure data conforms to schema, providing defaults for missing optional fields
         const video: z.infer<typeof YouTubeVideoSchema> = {
-            id: videoData.id || 'unknown', // Provide fallback for zod validation
+            id: videoData.id || 'unknown_id', // Provide fallback for zod validation
             title: videoData.title || 'Untitled Video',
             thumbnailUrl: videoData.thumbnailUrl || 'https://placehold.co/320x180.png?text=No+Thumbnail',
             views: videoData.views || 0,
@@ -93,3 +96,4 @@ const fetchYouTubeDetailsFlow = ai.defineFlow(
     return { videos: validatedVideos };
   }
 );
+
