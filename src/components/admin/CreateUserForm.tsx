@@ -21,11 +21,11 @@ const userFormSchemaBase = z.object({
 });
 
 const createUserSchema = userFormSchemaBase.extend({
-  password: z.string().min(6, "Password must be at least 6 characters (for reference, auth account needs separate admin creation)."),
+  password: z.string().min(6, "Password (for admin reference) must be at least 6 characters."),
 });
 
 const editUserSchema = userFormSchemaBase.extend({
-  password: z.string().optional(),
+  password: z.string().optional(), // Password is not editable for existing users via this form in terms of Auth.
 });
 
 type UserFormValues = z.infer<typeof createUserSchema> | z.infer<typeof editUserSchema>;
@@ -57,7 +57,7 @@ const CreateUserForm: React.FC<CreateUserFormProps> = ({ isOpen, onOpenChange, o
           name: initialData.name,
           email: initialData.email,
           role: initialData.role,
-          password: '',
+          password: '', // Password field is cleared for edits, as it's reference for manual Auth setup.
         });
       } else {
         form.reset({
@@ -79,7 +79,9 @@ const CreateUserForm: React.FC<CreateUserFormProps> = ({ isOpen, onOpenChange, o
         trackedChannels: initialData?.trackedChannels || { youtube: [], instagram: [] },
     };
 
-    if (data.password && data.password.length > 0) {
+    // For new users, the password from the form is for admin reference.
+    // It's NOT used by this client-side function to create an Auth account.
+    if (!isEditing && data.password && data.password.length > 0) {
         userDataToSubmit.password = data.password;
     }
 
@@ -95,16 +97,18 @@ const CreateUserForm: React.FC<CreateUserFormProps> = ({ isOpen, onOpenChange, o
           <DialogDescription>
             {isEditing
               ? "Update the user's profile details below. Email cannot be changed here. Profile changes are saved to Firestore."
-              : "Fill in the details to create a new user profile in Firestore. This profile is for data storage."
+              : "Fill in the details to create a new user profile in Firestore. This profile is for data storage only."
             }
           </DialogDescription>
         </DialogHeader>
         {!isEditing && (
           <Alert variant="default" className="mt-4 bg-primary/10 border-primary/50">
             <AlertTriangle className="h-4 w-4 text-primary" />
-            <AlertTitle className="text-primary font-semibold">Important: Action Required for Login</AlertTitle>
+            <AlertTitle className="text-primary font-semibold">Important: Login Account Setup Required</AlertTitle>
             <AlertDescription className="text-primary/90">
-              Creating a profile here **only saves data to Firestore**. For the user to log in, you **must also create an account for them in Firebase Authentication** (Build &gt; Authentication &gt; Users tab in your Firebase Console) using the same email and a password.
+              Creating a profile here **only saves data to Firestore for app use (name, role, etc.)**.
+              <br/>For the user to actually log in, an admin **must also manually create an account for them in Firebase Authentication** (Build &gt; Authentication &gt; Users tab in your Firebase Console) using the same email and a password.
+              The password field below is for your reference when doing so.
             </AlertDescription>
           </Alert>
         )}
@@ -143,11 +147,27 @@ const CreateUserForm: React.FC<CreateUserFormProps> = ({ isOpen, onOpenChange, o
                 name="password"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Password (for reference only)</FormLabel>
+                    <FormLabel>Password (for Admin Reference Only)</FormLabel>
                     <FormControl>
-                      <Input type="password" placeholder="Set initial password" {...field} />
+                      <Input type="password" placeholder="Enter password for reference" {...field} />
                     </FormControl>
-                    <FormDescription>Min 6 characters. This password is **not** used for login unless you set the exact same one in Firebase Authentication.</FormDescription>
+                    <FormDescription>Min 6 characters. This password is **for your reference only** when you manually create the user's login account in Firebase Authentication. This app will NOT use this password to create the login account.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+             {isEditing && ( // Optional: Show a note if editing about password not being handled here.
+                <FormField
+                control={form.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Set/Update Password (via Firebase Console)</FormLabel>
+                     <FormControl>
+                      <Input type="password" placeholder="Password managed in Firebase Auth" {...field} disabled={true} value="********" />
+                    </FormControl>
+                    <FormDescription>User passwords must be managed directly in Firebase Authentication by an administrator.</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -178,7 +198,7 @@ const CreateUserForm: React.FC<CreateUserFormProps> = ({ isOpen, onOpenChange, o
               <DialogClose asChild>
                 <Button type="button" variant="outline">Cancel</Button>
               </DialogClose>
-              <Button type="submit">{initialData ? 'Save Changes to Profile' : 'Create User Profile in Firestore'}</Button>
+              <Button type="submit">{initialData ? 'Save Profile Changes to Firestore' : 'Create User Profile in Firestore'}</Button>
             </DialogFooter>
           </form>
         </Form>
