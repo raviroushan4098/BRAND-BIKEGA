@@ -49,7 +49,7 @@ export default function UserManagementPage() {
   };
 
   const handleDeleteUser = async (userId: string) => {
-    if (!window.confirm("Are you sure you want to delete this user's profile? This action might not delete their authentication record.")) {
+    if (!window.confirm("Are you sure you want to delete this user's profile? This action removes their data from Firestore but does NOT delete their authentication record or prevent login if their auth account still exists.")) {
       return;
     }
     setIsLoading(true);
@@ -63,32 +63,29 @@ export default function UserManagementPage() {
     setIsLoading(false);
   };
 
-  // The Omit type might need adjustment if 'password' is part of UserFormValues in CreateUserForm but not User
   const handleSubmitUser = async (userData: Omit<User, 'id' | 'lastLogin'> & { password?: string }, currentUserId?: string) => {
     setIsLoading(true);
     if (currentUserId) {
-      // Update user
-      const { password, ...updateData } = userData; // Exclude password from update data
+      // Update user profile in Firestore
+      const { password, email, ...updateData } = userData; // Exclude password and email from direct update data
       const success = await apiAdminUpdateUser(currentUserId, updateData);
       if (success) {
-        await fetchUsers(); // Re-fetch to get updated list
-        toast({ title: "User Updated", description: `${userData.name}'s details have been updated.` });
+        await fetchUsers(); 
+        toast({ title: "User Profile Updated", description: `${userData.name}'s profile details have been updated in Firestore.` });
       } else {
-        toast({ title: "Error", description: "Failed to update user.", variant: "destructive" });
+        toast({ title: "Error", description: "Failed to update user profile.", variant: "destructive" });
       }
     } else {
-      // Create user (userData includes password if provided by form)
-      if (!userData.password) {
-         toast({ title: "Error", description: "Password is required for new user creation.", variant: "destructive" });
-         setIsLoading(false);
-         return;
+      // Create user profile in Firestore (userData includes password if provided by form, but it's not used for Auth creation by apiAdminCreateUser)
+      if (!userData.password) { // Password field in form is for admin reference or future backend use
+         toast({ title: "Password Field Note", description: "Password field in form is noted, but auth record needs separate admin creation.", variant: "default" });
       }
-      const newUser = await apiAdminCreateUser(userData as Omit<User, 'id' | 'lastLogin'> & {password: string});
-      if (newUser) {
-        await fetchUsers(); // Re-fetch to include new user
-        toast({ title: "User Profile Created", description: `${newUser.name} has been added to Firestore. Ensure their auth account is also set up.` });
+      const newUserProfile = await apiAdminCreateUser(userData as Omit<User, 'id' | 'lastLogin'> & {password: string});
+      if (newUserProfile) {
+        await fetchUsers(); 
+        toast({ title: "User Profile Created", description: `${newUserProfile.name}'s profile has been added to Firestore. Ensure their auth account is also set up by an admin for login.` });
       } else {
-        toast({ title: "Error", description: "Failed to create user profile.", variant: "destructive" });
+        toast({ title: "Error", description: "Failed to create user profile in Firestore.", variant: "destructive" });
       }
     }
     setIsLoading(false);
@@ -103,21 +100,21 @@ export default function UserManagementPage() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Users className="h-8 w-8 text-primary" />
-                <CardTitle className="text-3xl font-bold">User Management</CardTitle>
+                <CardTitle className="text-3xl font-bold">User Profile Management</CardTitle>
               </div>
               <div className="flex gap-2">
                 <Button onClick={fetchUsers} variant="outline" size="lg" disabled={isLoading}>
                   <RefreshCw className={`mr-2 h-5 w-5 ${isLoading ? 'animate-spin' : ''}`} /> Refresh
                 </Button>
                 <Button onClick={handleCreateUser} size="lg" disabled={isLoading}>
-                  <PlusCircle className="mr-2 h-5 w-5" /> Create User
+                  <PlusCircle className="mr-2 h-5 w-5" /> Create User Profile
                 </Button>
               </div>
             </div>
             <CardDescription>
-              Manage user roles, permissions, and tracked social media channels. User profiles are stored in Firestore.
+              Manage user roles and tracked social media channels. User profiles are stored in Firestore.
               <br/>
-              <span className="text-destructive text-xs">Note: User authentication records (login credentials) are managed separately in Firebase Authentication. Deleting a user here removes their profile data, not their login.</span>
+              <span className="text-destructive text-xs font-semibold">Important:</span> User authentication records (login credentials) are managed separately in Firebase Authentication. Creating a user profile here does not automatically create their login account. Deleting a user profile here removes their data from Firestore but does not delete their authentication record.
             </CardDescription>
           </CardHeader>
         </Card>
@@ -127,15 +124,15 @@ export default function UserManagementPage() {
             {isLoading && users.length === 0 ? (
               <div className="text-center py-10">
                 <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-2 text-muted-foreground" />
-                <p className="text-muted-foreground">Loading users...</p>
+                <p className="text-muted-foreground">Loading user profiles...</p>
               </div>
             ) : users.length > 0 ? (
               <UserTable users={users} onEditUser={handleEditUser} onDeleteUser={handleDeleteUser} />
             ) : (
               <div className="text-center py-10">
-                <p className="text-muted-foreground">No users found.</p>
+                <p className="text-muted-foreground">No user profiles found in Firestore.</p>
                 <Button onClick={handleCreateUser} className="mt-4">
-                  Create Your First User Profile
+                  Create First User Profile
                 </Button>
               </div>
             )}

@@ -5,7 +5,7 @@ import type { User } from '@/lib/authService';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { format } from 'date-fns';
+import { format, isValid, parseISO } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Edit3, Trash2 } from 'lucide-react';
 
@@ -18,12 +18,26 @@ interface UserTableProps {
 const UserTable: React.FC<UserTableProps> = ({ users, onEditUser, onDeleteUser }) => {
   
   const getInitials = (name: string) => {
+    if (!name) return '??';
     const names = name.split(' ');
     if (names.length > 1) {
       return `${names[0][0]}${names[names.length - 1][0]}`.toUpperCase();
     }
     return name.substring(0, 2).toUpperCase();
   }
+
+  const formatDateSafe = (dateString: string) => {
+    try {
+      const date = parseISO(dateString);
+      if (isValid(date) && date.getFullYear() > 1970) { // Check if it's a valid date and not epoch/default
+        return format(date, 'MMM d, yyyy HH:mm');
+      }
+      return 'Never or unknown';
+    } catch (e) {
+      return 'Invalid date';
+    }
+  };
+
 
   return (
     <Table>
@@ -46,7 +60,7 @@ const UserTable: React.FC<UserTableProps> = ({ users, onEditUser, onDeleteUser }
                   <AvatarFallback>{getInitials(user.name)}</AvatarFallback>
                 </Avatar>
                 <div>
-                  <div className="font-medium">{user.name}</div>
+                  <div className="font-medium">{user.name || 'N/A'}</div>
                   <div className="text-xs text-muted-foreground">{user.email}</div>
                 </div>
               </div>
@@ -57,24 +71,24 @@ const UserTable: React.FC<UserTableProps> = ({ users, onEditUser, onDeleteUser }
               </Badge>
             </TableCell>
             <TableCell>
-              <div className="text-xs">
+              <div className="text-xs max-w-xs truncate">
                 {user.trackedChannels?.youtube && user.trackedChannels.youtube.length > 0 && (
-                  <div>YT: {user.trackedChannels.youtube.join(', ')}</div>
+                  <div title={user.trackedChannels.youtube.join(', ')}>YT: {user.trackedChannels.youtube.join(', ')}</div>
                 )}
                 {user.trackedChannels?.instagram && user.trackedChannels.instagram.length > 0 && (
-                  <div>IG: {user.trackedChannels.instagram.join(', ')}</div>
+                  <div title={user.trackedChannels.instagram.join(', ')}>IG: {user.trackedChannels.instagram.join(', ')}</div>
                 )}
                 {(!user.trackedChannels || 
                   (!user.trackedChannels.youtube?.length && !user.trackedChannels.instagram?.length)
                 ) && <span className="text-muted-foreground">None</span>}
               </div>
             </TableCell>
-            <TableCell>{format(new Date(user.lastLogin), 'MMM d, yyyy HH:mm')}</TableCell>
+            <TableCell>{formatDateSafe(user.lastLogin)}</TableCell>
             <TableCell className="text-right">
-              <Button variant="ghost" size="icon" onClick={() => onEditUser(user)} aria-label="Edit user">
+              <Button variant="ghost" size="icon" onClick={() => onEditUser(user)} aria-label="Edit user profile">
                 <Edit3 className="h-4 w-4" />
               </Button>
-              <Button variant="ghost" size="icon" onClick={() => onDeleteUser(user.id)} className="text-destructive hover:text-destructive" aria-label="Delete user">
+              <Button variant="ghost" size="icon" onClick={() => onDeleteUser(user.id)} className="text-destructive hover:text-destructive" aria-label="Delete user profile">
                 <Trash2 className="h-4 w-4" />
               </Button>
             </TableCell>

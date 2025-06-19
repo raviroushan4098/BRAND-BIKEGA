@@ -5,15 +5,13 @@ import React, { useEffect } from 'react';
 import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import type { User } from '@/lib/authService'; // User type doesn't have password
+import type { User } from '@/lib/authService'; 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label'; // Not used, FormLabel is used
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 
-// Schema for the form. Include password for creation, make optional for edit.
 const userFormSchemaBase = z.object({
   name: z.string().min(2, "Name must be at least 2 characters."),
   email: z.string().email("Invalid email address."),
@@ -22,27 +20,21 @@ const userFormSchemaBase = z.object({
   instagramProfiles: z.string().optional().transform(val => val ? val.split(',').map(s => s.trim()).filter(s => s) : []),
 });
 
-// For creating a new user, password is required
 const createUserSchema = userFormSchemaBase.extend({
-  password: z.string().min(6, "Password must be at least 6 characters."),
+  password: z.string().min(6, "Password must be at least 6 characters (for reference, auth account needs separate admin creation)."),
 });
 
-// For editing an existing user, password is optional (and typically not changed here)
 const editUserSchema = userFormSchemaBase.extend({
-  password: z.string().optional(), // Or z.string().min(6).optional() if you allow password change
+  password: z.string().optional(), 
 });
 
-
-// Use a conditional type for the schema based on whether initialData exists
 type UserFormValues = z.infer<typeof createUserSchema> | z.infer<typeof editUserSchema>;
-
 
 interface CreateUserFormProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  // This now expects password potentially
   onSubmitUser: (data: Omit<User, 'id' | 'lastLogin'> & { password?: string }, currentUserId?: string) => void;
-  initialData?: User | null; // User type does not have password
+  initialData?: User | null; 
 }
 
 const CreateUserForm: React.FC<CreateUserFormProps> = ({ isOpen, onOpenChange, onSubmitUser, initialData }) => {
@@ -56,12 +48,12 @@ const CreateUserForm: React.FC<CreateUserFormProps> = ({ isOpen, onOpenChange, o
       role: 'user',
       youtubeChannels: [],
       instagramProfiles: [],
-      password: '', // Initialize password field
+      password: '', 
     },
   });
 
   useEffect(() => {
-    if (isOpen) { // Reset form when dialog opens or initialData changes
+    if (isOpen) { 
       if (initialData) {
         form.reset({
           name: initialData.name,
@@ -69,10 +61,10 @@ const CreateUserForm: React.FC<CreateUserFormProps> = ({ isOpen, onOpenChange, o
           role: initialData.role,
           youtubeChannels: initialData.trackedChannels?.youtube || [],
           instagramProfiles: initialData.trackedChannels?.instagram || [],
-          password: '', // Password field cleared for editing, or not shown
+          password: '', 
         });
       } else {
-        form.reset({ // Default for new user
+        form.reset({ 
           name: '',
           email: '',
           role: 'user',
@@ -82,20 +74,20 @@ const CreateUserForm: React.FC<CreateUserFormProps> = ({ isOpen, onOpenChange, o
         });
       }
     }
-  }, [initialData, form, isOpen, isEditing]);
+  }, [initialData, form, isOpen]);
 
 
   const handleSubmit: SubmitHandler<UserFormValues> = (data) => {
     const userDataToSubmit: Omit<User, 'id' | 'lastLogin'> & { password?: string } = {
         name: data.name,
-        email: data.email,
+        email: data.email, // Email is collected
         role: data.role,
         trackedChannels: {
-            youtube: data.youtubeChannels as string[] | undefined, // Ensure correct type
-            instagram: data.instagramProfiles as string[] | undefined, // Ensure correct type
+            youtube: data.youtubeChannels as string[] | undefined, 
+            instagram: data.instagramProfiles as string[] | undefined, 
         }
     };
-    // Only include password if it's provided (relevant for creation or if edit form allows password change)
+    
     if (data.password && data.password.length > 0) {
         userDataToSubmit.password = data.password;
     }
@@ -110,7 +102,10 @@ const CreateUserForm: React.FC<CreateUserFormProps> = ({ isOpen, onOpenChange, o
         <DialogHeader>
           <DialogTitle>{initialData ? 'Edit User Profile' : 'Create New User Profile'}</DialogTitle>
           <DialogDescription>
-            {initialData ? "Update the user's profile details below. Password cannot be changed here." : 'Fill in the details to create a new user profile and set their initial password. The auth record needs separate creation in Firebase Authentication by an admin.'}
+            {isEditing 
+              ? "Update the user's profile details below. Email cannot be changed here. Profile changes are saved to Firestore." 
+              : 'Fill in the details to create a new user profile in Firestore. The password field is for reference. The user\'s authentication account (for login) must be created separately by an admin in Firebase Authentication.'
+            }
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -137,7 +132,7 @@ const CreateUserForm: React.FC<CreateUserFormProps> = ({ isOpen, onOpenChange, o
                   <FormControl>
                     <Input type="email" placeholder="user@example.com" {...field} readOnly={isEditing} />
                   </FormControl>
-                  {isEditing && <FormDescription>Email cannot be changed for existing users.</FormDescription>}
+                  {isEditing && <FormDescription>Email cannot be changed for existing user profiles via this form.</FormDescription>}
                   <FormMessage />
                 </FormItem>
               )}
@@ -148,11 +143,11 @@ const CreateUserForm: React.FC<CreateUserFormProps> = ({ isOpen, onOpenChange, o
                 name="password"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Password</FormLabel>
+                    <FormLabel>Password (for reference)</FormLabel>
                     <FormControl>
                       <Input type="password" placeholder="Set initial password" {...field} />
                     </FormControl>
-                    <FormDescription>Min 6 characters. This password is for the new user's auth account.</FormDescription>
+                    <FormDescription>Min 6 characters. This is for record-keeping; the actual login account requires admin setup in Firebase Auth.</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -189,7 +184,7 @@ const CreateUserForm: React.FC<CreateUserFormProps> = ({ isOpen, onOpenChange, o
                     <Input 
                       placeholder="UC...,UC..." 
                       value={Array.isArray(value) ? value.join(',') : ''}
-                      onChange={(e) => onChange(e.target.value)}
+                      onChange={(e) => onChange(e.target.value.split(',').map(s => s.trim()).filter(s => s))}
                       {...rest}
                     />
                   </FormControl>
@@ -208,7 +203,7 @@ const CreateUserForm: React.FC<CreateUserFormProps> = ({ isOpen, onOpenChange, o
                      <Input 
                       placeholder="profile1,profile2" 
                       value={Array.isArray(value) ? value.join(',') : ''}
-                      onChange={(e) => onChange(e.target.value)}
+                      onChange={(e) => onChange(e.target.value.split(',').map(s => s.trim()).filter(s => s))}
                       {...rest}
                     />
                   </FormControl>
@@ -221,7 +216,7 @@ const CreateUserForm: React.FC<CreateUserFormProps> = ({ isOpen, onOpenChange, o
               <DialogClose asChild>
                 <Button type="button" variant="outline">Cancel</Button>
               </DialogClose>
-              <Button type="submit">{initialData ? 'Save Changes' : 'Create User Profile'}</Button>
+              <Button type="submit">{initialData ? 'Save Changes to Profile' : 'Create User Profile'}</Button>
             </DialogFooter>
           </form>
         </Form>
