@@ -3,14 +3,17 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
+  apiKey: "AIzaSyAWK3lGZYnugzakCiceZ1o5j2HM-yHyjmo",
+  authDomain: "insertfetch-663ca.firebaseapp.com",
+  databaseURL: "https://insertfetch-663ca-default-rtdb.firebaseio.com",
+  projectId: "insertfetch-663ca",
+  storageBucket: "insertfetch-663ca.appspot.com", // Corrected common typo: firebasestorage.app to appspot.com
+  messagingSenderId: "1038684449062",
+  appId: "1:1038684449062:web:e61d52c6325b0027a9b9e7",
+  measurementId: "G-TSV3YRCHJD"
 };
 
 // Initialize Firebase
