@@ -2,7 +2,7 @@
 "use client";
 
 import type { User } from '@/lib/authService';
-import { getCurrentUser as fetchCurrentUser, loginWithEmailOtp as apiLogin, verifyOtp as apiVerifyOtp, logout as apiLogout } from '@/lib/authService';
+import { getCurrentUser as fetchCurrentUser, requestOtp as apiLogin, verifyOtp as apiVerifyOtp, logout as apiLogout } from '@/lib/authService';
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 
