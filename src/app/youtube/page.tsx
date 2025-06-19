@@ -72,11 +72,11 @@ export default function YouTubeManagementPage() {
     }
 
     setIsAssigning(true);
-    let newLinks: string[] = [];
+    let linksFromInput: string[] = [];
 
     if (singleLink.trim()) {
       if (isValidHttpUrl(singleLink.trim())) {
-        newLinks.push(singleLink.trim());
+        linksFromInput.push(singleLink.trim());
       } else {
         toast({ title: "Invalid URL", description: "The single link provided is not a valid URL.", variant: "destructive" });
         setIsAssigning(false);
@@ -88,7 +88,7 @@ export default function YouTubeManagementPage() {
       try {
         const parsedLinksFromCsv = await parseCsvFile(csvFile);
         const validCsvLinks = parsedLinksFromCsv.filter(isValidHttpUrl);
-        newLinks = newLinks.concat(validCsvLinks);
+        linksFromInput = linksFromInput.concat(validCsvLinks);
         if (parsedLinksFromCsv.length !== validCsvLinks.length) {
           toast({ title: "CSV Processed with Exclusions", description: "Some entries in the CSV were not valid URLs and were excluded.", variant: "default" });
         }
@@ -98,20 +98,24 @@ export default function YouTubeManagementPage() {
         return;
       }
     }
+    
+    const uniqueLinksFromInput = Array.from(new Set(linksFromInput));
 
-    if (newLinks.length === 0) {
-      toast({ title: "No Valid Links", description: "No valid YouTube links were found to assign.", variant: "destructive" });
+    if (uniqueLinksFromInput.length === 0) {
+      toast({ title: "No Valid Links", description: "No valid YouTube links were found in your input to assign.", variant: "destructive" });
       setIsAssigning(false);
       return;
     }
     
-    const uniqueNewLinks = Array.from(new Set(newLinks));
+    const result = await assignYouTubeLinksToUser(selectedUserId, uniqueLinksFromInput);
 
-    const success = await assignYouTubeLinksToUser(selectedUserId, uniqueNewLinks);
-
-    if (success) {
-      const targetUser = users.find(u => u.id === selectedUserId); 
-      toast({ title: "Links Assigned", description: `Successfully assigned ${uniqueNewLinks.length} new unique link(s) to ${targetUser?.name || 'the selected user'}.` });
+    if (result.success) {
+      const targetUser = users.find(u => u.id === selectedUserId);
+      if (result.actuallyAddedCount > 0) {
+        toast({ title: "Links Assigned", description: `Successfully assigned ${result.actuallyAddedCount} new unique link(s) to ${targetUser?.name || 'the selected user'}.` });
+      } else {
+        toast({ title: "Links Updated", description: `No new unique links were added to ${targetUser?.name || 'the selected user'}. The list may have already contained these links.` });
+      }
       setSingleLink('');
       setCsvFile(null);
       const fileInput = document.getElementById('csv-upload') as HTMLInputElement;
@@ -141,14 +145,12 @@ export default function YouTubeManagementPage() {
           resolve([]);
           return;
         }
-        let lines = text.split(/\r\n|\n/).map(line => line.trim()).filter(Boolean); // Trim and filter empty lines
+        let lines = text.split(/\r\n|\n/).map(line => line.trim()).filter(Boolean); 
         
-        // Explicitly remove header if it's "link" (case-insensitive)
         if (lines.length > 0 && lines[0].trim().toLowerCase() === 'link') {
           lines = lines.slice(1);
         }
         
-        // Assume links are in the first column if multiple columns exist, then trim again
         const urls = lines.map(line => line.split(',')[0].trim()).filter(Boolean);
         resolve(urls);
       };
