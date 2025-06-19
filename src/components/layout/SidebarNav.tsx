@@ -21,7 +21,7 @@ import {
   LogOut,
   Settings,
   HelpCircle,
-  KeyRound, // Added KeyRound icon
+  KeyRound,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -31,14 +31,14 @@ const SidebarNav = () => {
 
   const navItems = [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { href: '/youtube', label: 'YouTube Analytics', icon: Youtube },
+    { href: '/youtube', label: 'YouTube Management', icon: Youtube }, // Updated label
     { href: '/instagram', label: 'Instagram Analytics', icon: Instagram },
     { href: '/suggestions', label: 'AI Suggestions', icon: Lightbulb },
   ];
 
   const adminNavItems = [
     { href: '/admin/users', label: 'User Management', icon: Users },
-    { href: '/admin/api-management', label: 'API Management', icon: KeyRound }, // New API Management link
+    { href: '/admin/api-management', label: 'API Management', icon: KeyRound },
   ];
 
   return (
