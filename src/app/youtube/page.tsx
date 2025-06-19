@@ -35,7 +35,7 @@ export default function YouTubeManagementPage() {
         const fetchedUsers = await apiGetAllUsers();
         setUsers(fetchedUsers.filter(u => u.id !== user.id)); 
       } catch (error) {
-        toast({ title: "Error Fetching Users", description: "Could not load user data.", variant: "destructive" });
+        // Error toast removed as per previous request
       }
       setIsLoadingUsers(false);
     }
@@ -86,11 +86,11 @@ export default function YouTubeManagementPage() {
 
     if (csvFile) {
       try {
-        const csvLinks = await parseCsvFile(csvFile);
-        const validCsvLinks = csvLinks.filter(isValidHttpUrl);
+        const parsedLinksFromCsv = await parseCsvFile(csvFile);
+        const validCsvLinks = parsedLinksFromCsv.filter(isValidHttpUrl);
         newLinks = newLinks.concat(validCsvLinks);
-        if (csvLinks.length !== validCsvLinks.length) {
-          toast({ title: "CSV Processed with Exclusions", description: "Some invalid URLs were excluded from the CSV.", variant: "default" });
+        if (parsedLinksFromCsv.length !== validCsvLinks.length) {
+          toast({ title: "CSV Processed with Exclusions", description: "Some entries in the CSV were not valid URLs and were excluded.", variant: "default" });
         }
       } catch (error) {
         toast({ title: "CSV Parsing Error", description: "Could not parse the CSV file.", variant: "destructive" });
@@ -141,7 +141,14 @@ export default function YouTubeManagementPage() {
           resolve([]);
           return;
         }
-        const lines = text.split(/\r\n|\n/);
+        let lines = text.split(/\r\n|\n/).map(line => line.trim()).filter(Boolean); // Trim and filter empty lines
+        
+        // Explicitly remove header if it's "link" (case-insensitive)
+        if (lines.length > 0 && lines[0].trim().toLowerCase() === 'link') {
+          lines = lines.slice(1);
+        }
+        
+        // Assume links are in the first column if multiple columns exist, then trim again
         const urls = lines.map(line => line.split(',')[0].trim()).filter(Boolean);
         resolve(urls);
       };
