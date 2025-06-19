@@ -64,10 +64,10 @@ const ChannelAnalyticsReportDisplay: React.FC<ChannelAnalyticsReportDisplayProps
       });
       
       // Helper function for adding a standard content slide
-      const addContentSlide = (slideTitle: string, content?: PptxGenJS.TextProps[]) => {
+      const addContentSlide = (slideTitle: string, content?: PptxGenJS.TextProps[] | string) => {
         const slide = pptx.addSlide({ masterName: "MASTER_SLIDE" });
         slide.addText(slideTitle, { x: 0.5, y: 1.0, w: "90%", h: 0.5, fontSize: 28, bold: true, color: primaryColor });
-        if (content && content.length > 0) {
+        if (content && Array.isArray(content) && content.length > 0) {
            slide.addText(content, { x: 0.5, y: 1.75, w: "90%", h: 4.5, fontSize: 12, color: textColor, bullet: {type: 'bullet'} });
         } else if (typeof content === 'string') {
            slide.addText(content, { x: 0.5, y: 1.75, w: "90%", h: 4.5, fontSize: 12, color: textColor });
