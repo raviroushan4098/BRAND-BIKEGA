@@ -83,7 +83,7 @@ interface FeatureCardProps {
 }
 
 const FeatureCard = ({ icon, title, description, link, linkLabel }: FeatureCardProps) => (
-  <Card className="hover:shadow-xl transition-shadow duration-300">
+  <Card className="hover:shadow-xl hover:scale-105 transition-shadow transition-transform duration-300">
     <CardHeader className="flex flex-row items-center gap-4 pb-2">
       {icon}
       <CardTitle className="text-xl">{title}</CardTitle>
@@ -112,4 +112,3 @@ const QuickLinkButton = ({ href, icon, label }: QuickLinkButtonProps) => (
     </Link>
   </Button>
 );
-

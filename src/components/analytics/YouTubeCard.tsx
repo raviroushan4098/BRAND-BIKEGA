@@ -45,7 +45,7 @@ const YouTubeCard: React.FC<YouTubeCardProps> = ({ video }) => {
   const videoUrl = `https://www.youtube.com/watch?v=${video.id}`;
 
   return (
-    <Card className="overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 flex flex-col">
+    <Card className="overflow-hidden shadow-lg hover:shadow-xl hover:scale-105 transition-shadow transition-transform duration-300 flex flex-col">
       <CardHeader className="p-0">
         <div className="aspect-video relative">
           <Image

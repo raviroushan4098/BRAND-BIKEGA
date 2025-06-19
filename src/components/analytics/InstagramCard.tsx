@@ -13,7 +13,7 @@ const InstagramCard: React.FC<InstagramCardProps> = ({ post }) => {
   const timeAgo = formatDistanceToNow(new Date(post.timestamp), { addSuffix: true });
 
   return (
-    <Card className="overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300">
+    <Card className="overflow-hidden shadow-lg hover:shadow-xl hover:scale-105 transition-shadow transition-transform duration-300">
       <CardHeader className="p-0">
         <div className="aspect-square relative">
           <Image
