@@ -2,11 +2,12 @@
 export interface YouTubeVideo {
   id: string;
   title: string;
+  description?: string; // Added description
   thumbnailUrl: string;
   likes: number;
   comments: number;
   views: number;
-  publishedAt: string; // Added
+  publishedAt: string;
 }
 
 export interface InstagramPost {
@@ -22,6 +23,7 @@ export const mockYouTubeData: YouTubeVideo[] = [
   {
     id: 'vid1',
     title: 'My Awesome Gaming Montage',
+    description: 'Check out these epic plays in my latest gaming montage! Lots of fun moments and skilled gameplay. Let me know what you think in the comments!',
     thumbnailUrl: 'https://placehold.co/320x180.png?text=Gaming+Montage',
     likes: 1200,
     comments: 345,
@@ -31,6 +33,7 @@ export const mockYouTubeData: YouTubeVideo[] = [
   {
     id: 'vid2',
     title: 'Ultimate Cooking Fails Compilation',
+    description: 'Sometimes things go wrong in the kitchen... very wrong! Here are some of my biggest cooking fails. Hope you get a laugh out of it!',
     thumbnailUrl: 'https://placehold.co/320x180.png?text=Cooking+Fails',
     likes: 850,
     comments: 210,
@@ -40,6 +43,7 @@ export const mockYouTubeData: YouTubeVideo[] = [
   {
     id: 'vid3',
     title: 'Travel Vlog: Exploring the Mountains',
+    description: 'Join me on an adventure as I explore the breathtaking mountain landscapes. Stunning views and challenging hikes!',
     thumbnailUrl: 'https://placehold.co/320x180.png?text=Travel+Vlog',
     likes: 2500,
     comments: 500,
@@ -49,6 +53,7 @@ export const mockYouTubeData: YouTubeVideo[] = [
   {
     id: 'vid4',
     title: 'Tech Review: Latest Smartphone',
+    description: 'In-depth review of the newest smartphone on the market. Is it worth the hype? Let\'s find out. Features, camera, performance, and more.',
     thumbnailUrl: 'https://placehold.co/320x180.png?text=Tech+Review',
     likes: 980,
     comments: 180,
@@ -91,3 +96,4 @@ export const mockInstagramData: InstagramPost[] = [
     caption: 'Exploring new places. #adventure #wanderlust',
   },
 ];
+

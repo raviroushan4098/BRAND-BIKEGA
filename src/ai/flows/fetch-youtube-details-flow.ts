@@ -11,19 +11,18 @@
 import { ai } from '@/ai/genkit';
 import { z } from 'zod'; 
 import { getVideoStatistics } from '@/lib/youtubeApiService';
-// No longer importing YouTubeVideo from mockData for the schema, 
-// as the flow itself defines the output structure via Zod based on API reality.
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query, where, limit } from 'firebase/firestore';
 
 const YouTubeVideoSchema = z.object({
   id: z.string(),
   title: z.string(),
+  description: z.string().optional(), // Add description as optional
   thumbnailUrl: z.string(),
   views: z.number().optional().default(0),
   likes: z.number().optional().default(0),
   comments: z.number().optional().default(0),
-  publishedAt: z.string(), // Added publishedAt, made required
+  publishedAt: z.string(),
 });
 
 const FetchYouTubeDetailsInputSchema = z.object({
@@ -78,15 +77,15 @@ const fetchYouTubeDetailsFlow = ai.defineFlow(
     
     const validatedVideos: z.infer<typeof YouTubeVideoSchema>[] = [];
     for (const videoData of fetchedVideosData) {
-        // Ensure all fields required by YouTubeVideoSchema are present, providing defaults if necessary.
         const video: z.infer<typeof YouTubeVideoSchema> = {
-            id: videoData.id || 'unknown_id', // Should always come from API
+            id: videoData.id || 'unknown_id',
             title: videoData.title || 'Untitled Video',
+            description: videoData.description || '', // Include description
             thumbnailUrl: videoData.thumbnailUrl || 'https://placehold.co/320x180.png?text=No+Thumbnail',
             views: videoData.views || 0,
             likes: videoData.likes || 0,
             comments: videoData.comments || 0,
-            publishedAt: videoData.publishedAt || new Date(0).toISOString(), // Default to epoch if missing
+            publishedAt: videoData.publishedAt || new Date(0).toISOString(),
         };
         validatedVideos.push(video);
     }

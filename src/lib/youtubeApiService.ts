@@ -7,7 +7,7 @@ interface YouTubeApiItemSnippet {
   publishedAt: string;
   channelId: string;
   title: string;
-  description: string;
+  description: string; // Ensure description is part of the snippet type
   thumbnails: {
     default: { url: string; width: number; height: number };
     medium: { url: string; width: number; height: number };
@@ -77,6 +77,7 @@ export async function getVideoStatistics(videoIds: string[], apiKey: string): Pr
     return data.items.map((item) => ({
       id: item.id,
       title: item.snippet.title,
+      description: item.snippet.description, // Include description
       thumbnailUrl: item.snippet.thumbnails.high?.url || item.snippet.thumbnails.medium?.url || item.snippet.thumbnails.default.url,
       views: parseInt(item.statistics.viewCount, 10) || 0,
       likes: parseInt(item.statistics.likeCount || "0", 10) || 0,
