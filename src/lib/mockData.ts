@@ -2,12 +2,12 @@
 export interface YouTubeVideo {
   id: string;
   title: string;
-  description?: string; // Added description
+  description?: string; 
   thumbnailUrl: string;
-  likes: number;
-  comments: number;
-  views: number;
-  publishedAt: string;
+  views: number; // Ensuring this is number, matching schema
+  likes: number; // Ensuring this is number
+  comments: number; // Ensuring this is number
+  publishedAt: string; // ISO String
 }
 
 export interface InstagramPost {
@@ -96,4 +96,3 @@ export const mockInstagramData: InstagramPost[] = [
     caption: 'Exploring new places. #adventure #wanderlust',
   },
 ];
-
