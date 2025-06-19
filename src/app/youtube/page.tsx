@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import AppLayout from '@/components/layout/AppLayout';
 import YouTubeCard from '@/components/analytics/YouTubeCard';
-import { mockYouTubeData, type YouTubeVideo } from '@/lib/mockData';
+import { type YouTubeVideo } from '@/lib/mockData'; // Keep type, remove mockYouTubeData
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -13,43 +13,122 @@ import { Label } from '@/components/ui/label';
 import { useAuth } from '@/hooks/useAuth';
 import type { User } from '@/lib/authService';
 import { getAllUsers as apiGetAllUsers } from '@/lib/authService';
-import { assignYouTubeLinksToUser } from '@/lib/youtubeLinkService';
+import { assignYouTubeLinksToUser, getYouTubeLinksForUser } from '@/lib/youtubeLinkService';
 import { toast } from '@/hooks/use-toast';
-import { BarChart3, UserPlus, LinkIcon, FileText, UploadCloud, Users, DownloadCloud } from 'lucide-react';
+import { BarChart3, UserPlus, LinkIcon, FileText, UploadCloud, Users, DownloadCloud, Loader2, YoutubeIcon } from 'lucide-react';
 
 export default function YouTubeManagementPage() {
   const { user } = useAuth();
-  const videos: YouTubeVideo[] = mockYouTubeData; 
-
-  const [users, setUsers] = useState<User[]>([]);
-  const [selectedUserId, setSelectedUserId] = useState<string>('');
+  
+  const [usersForAdminSelect, setUsersForAdminSelect] = useState<User[]>([]);
+  const [selectedUserIdForAdmin, setSelectedUserIdForAdmin] = useState<string>('');
+  
   const [singleLink, setSingleLink] = useState<string>('');
   const [csvFile, setCsvFile] = useState<File | null>(null);
+  
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
   const [isAssigning, setIsAssigning] = useState(false);
 
-  const fetchUsers = useCallback(async () => {
+  const [assignedLinks, setAssignedLinks] = useState<string[]>([]);
+  const [videosToDisplay, setVideosToDisplay] = useState<YouTubeVideo[]>([]);
+  const [isLoadingVideos, setIsLoadingVideos] = useState(false);
+
+  const fetchUsersForAdmin = useCallback(async () => {
     if (user?.role === 'admin') {
       setIsLoadingUsers(true);
       try {
         const fetchedUsers = await apiGetAllUsers();
-        setUsers(fetchedUsers.filter(u => u.id !== user.id)); 
+        setUsersForAdminSelect(fetchedUsers.filter(u => u.id !== user.id)); 
       } catch (error) {
-        // Error toast removed as per previous request
+        // Error toast already removed
       }
       setIsLoadingUsers(false);
     }
   }, [user?.id, user?.role]);
 
   useEffect(() => {
-    fetchUsers();
-  }, [fetchUsers]);
+    fetchUsersForAdmin();
+  }, [fetchUsersForAdmin]);
+
+  const extractYouTubeVideoId = (url: string): string | null => {
+    if (!url) return null;
+    let videoId = null;
+    try {
+      const urlObj = new URL(url);
+      if (urlObj.hostname === 'youtu.be') {
+        videoId = urlObj.pathname.slice(1).split('?')[0];
+      } else if (urlObj.hostname.includes('youtube.com')) {
+        if (urlObj.pathname.startsWith('/embed/')) {
+          videoId = urlObj.pathname.split('/embed/')[1].split('?')[0];
+        } else if (urlObj.pathname.startsWith('/watch')) {
+          videoId = urlObj.searchParams.get('v');
+        }
+      }
+      if (videoId && videoId.includes('&')) {
+        videoId = videoId.split('&')[0];
+      }
+    } catch (e) { return null; }
+    return videoId;
+  };
+
+  const transformLinksToVideos = useCallback((links: string[]): YouTubeVideo[] => {
+    return links.map((link, index) => {
+      const videoId = extractYouTubeVideoId(link);
+      return {
+        id: videoId || `link-${index}-${Date.now()}`,
+        title: videoId ? `Video: ${videoId}` : new URL(link).pathname.slice(1,20) || "Untitled Video",
+        thumbnailUrl: `https://placehold.co/320x180.png?text=${videoId || 'Video'}`,
+        likes: Math.floor(Math.random() * 100),
+        comments: Math.floor(Math.random() * 50),
+        shares: Math.floor(Math.random() * 20),
+        views: Math.floor(Math.random() * 1000) + 50,
+      };
+    });
+  }, []);
+
+  const fetchAndDisplayUserVideos = useCallback(async (userIdToFetch: string) => {
+    if (!userIdToFetch) {
+      setAssignedLinks([]);
+      return;
+    }
+    setIsLoadingVideos(true);
+    try {
+      const links = await getYouTubeLinksForUser(userIdToFetch);
+      setAssignedLinks(links);
+    } catch (error) {
+      // Error handling, perhaps a toast if needed, but keep UI clean
+      setAssignedLinks([]);
+    }
+    setIsLoadingVideos(false);
+  }, []);
+
+  useEffect(() => {
+    if (user?.role === 'admin') {
+      if (selectedUserIdForAdmin) {
+        fetchAndDisplayUserVideos(selectedUserIdForAdmin);
+      } else {
+        setVideosToDisplay([]); // Clear videos if no user selected by admin
+        setAssignedLinks([]);
+      }
+    } else if (user) { // Non-admin user
+      fetchAndDisplayUserVideos(user.id);
+    }
+  }, [user, selectedUserIdForAdmin, fetchAndDisplayUserVideos]);
+  
+  useEffect(() => {
+    if (assignedLinks.length > 0) {
+      setVideosToDisplay(transformLinksToVideos(assignedLinks));
+    } else {
+      setVideosToDisplay([]);
+    }
+  }, [assignedLinks, transformLinksToVideos]);
+
 
   const handleDownloadCsvTemplate = () => {
     const csvContent = "link\n";
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
-    if (link.download !== undefined) { // Feature detection
+    if (link.download !== undefined) {
       const url = URL.createObjectURL(blob);
       link.setAttribute("href", url);
       link.setAttribute("download", "youtube_links_template.csv");
@@ -62,7 +141,7 @@ export default function YouTubeManagementPage() {
   };
 
   const handleAssignLinks = async () => {
-    if (!selectedUserId) {
+    if (!selectedUserIdForAdmin) {
       toast({ title: "No User Selected", description: "Please select a user to assign links to.", variant: "destructive" });
       return;
     }
@@ -107,10 +186,10 @@ export default function YouTubeManagementPage() {
       return;
     }
     
-    const result = await assignYouTubeLinksToUser(selectedUserId, uniqueLinksFromInput);
+    const result = await assignYouTubeLinksToUser(selectedUserIdForAdmin, uniqueLinksFromInput);
 
     if (result.success) {
-      const targetUser = users.find(u => u.id === selectedUserId);
+      const targetUser = usersForAdminSelect.find(u => u.id === selectedUserIdForAdmin);
       if (result.actuallyAddedCount > 0) {
         toast({ title: "Links Assigned", description: `Successfully assigned ${result.actuallyAddedCount} new unique link(s) to ${targetUser?.name || 'the selected user'}.` });
       } else {
@@ -120,6 +199,10 @@ export default function YouTubeManagementPage() {
       setCsvFile(null);
       const fileInput = document.getElementById('csv-upload') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
+      // Refresh videos for the currently selected user
+      if (selectedUserIdForAdmin) {
+        fetchAndDisplayUserVideos(selectedUserIdForAdmin);
+      }
     } else {
       toast({ title: "Assignment Failed", description: "Could not assign links to the user in the 'youtube' collection.", variant: "destructive" });
     }
@@ -171,7 +254,10 @@ export default function YouTubeManagementPage() {
               </div>
             </div>
             <CardDescription>
-              Overview of YouTube video performance and tools for channel management.
+              {user?.role === 'admin' 
+                ? "Assign YouTube links to users and view their tracked videos." 
+                : "Overview of your assigned YouTube video performance."
+              }
             </CardDescription>
           </CardHeader>
         </Card>
@@ -190,19 +276,19 @@ export default function YouTubeManagementPage() {
                 <Label htmlFor="user-select" className="flex items-center mb-2">
                   <Users className="mr-2 h-4 w-4 text-muted-foreground" /> Select User
                 </Label>
-                <Select value={selectedUserId} onValueChange={setSelectedUserId} disabled={isLoadingUsers || isAssigning}>
+                <Select value={selectedUserIdForAdmin} onValueChange={setSelectedUserIdForAdmin} disabled={isLoadingUsers || isAssigning}>
                   <SelectTrigger id="user-select" className="w-full md:w-1/2">
-                    <SelectValue placeholder="Select a user..." />
+                    <SelectValue placeholder="Select a user to manage their videos..." />
                   </SelectTrigger>
                   <SelectContent>
                     {isLoadingUsers ? (
                       <SelectItem value="loading" disabled>Loading users...</SelectItem>
-                    ) : users.length > 0 ? (
-                      users.map(u => (
+                    ) : usersForAdminSelect.length > 0 ? (
+                      usersForAdminSelect.map(u => (
                         <SelectItem key={u.id} value={u.id}>{u.name} ({u.email})</SelectItem>
                       ))
                     ) : (
-                      <SelectItem value="no-users" disabled>No users available</SelectItem>
+                      <SelectItem value="no-users" disabled>No other users available</SelectItem>
                     )}
                   </SelectContent>
                 </Select>
@@ -245,28 +331,56 @@ export default function YouTubeManagementPage() {
               </div>
             </CardContent>
             <CardFooter>
-              <Button onClick={handleAssignLinks} disabled={isAssigning || !selectedUserId || (!singleLink && !csvFile)}>
+              <Button onClick={handleAssignLinks} disabled={isAssigning || !selectedUserIdForAdmin || (!singleLink && !csvFile)}>
                 <UploadCloud className="mr-2 h-5 w-5" />
                 {isAssigning ? 'Assigning...' : 'Assign Links'}
               </Button>
             </CardFooter>
           </Card>
         )}
-
-        {videos.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {videos.map((video) => (
-              <YouTubeCard key={video.id} video={video} />
-            ))}
-          </div>
-        ) : (
-          <Card>
-            <CardContent className="py-10 text-center">
-              <p className="text-muted-foreground">No YouTube data available to display.</p>
-              <p className="text-sm text-muted-foreground">Assigned YouTube channels will appear here for users.</p>
-            </CardContent>
-          </Card>
-        )}
+        
+        {/* Display Area for Video Cards */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-2xl">
+              {user?.role === 'admin' 
+                ? (selectedUserIdForAdmin ? `${usersForAdminSelect.find(u=>u.id === selectedUserIdForAdmin)?.name || 'Selected User'}'s Assigned Videos` : 'Select a User to View Videos')
+                : "Your Assigned YouTube Videos"
+              }
+            </CardTitle>
+            <CardDescription>
+              {user?.role === 'admin' && !selectedUserIdForAdmin 
+                ? 'Please select a user from the dropdown above to see their assigned videos.'
+                : isLoadingVideos 
+                  ? 'Loading video information...' 
+                  : videosToDisplay.length > 0 
+                    ? `Displaying ${videosToDisplay.length} video(s). Data shown is placeholder.`
+                    : (user?.role !== 'admin' ? 'You have no YouTube videos assigned yet.' : 'This user has no YouTube videos assigned.')
+              }
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {isLoadingVideos ? (
+              <div className="flex justify-center items-center py-10">
+                <Loader2 className="h-12 w-12 animate-spin text-primary" />
+              </div>
+            ) : videosToDisplay.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {videosToDisplay.map((video) => (
+                  <YouTubeCard key={video.id} video={video} />
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-10 text-muted-foreground">
+                <YoutubeIcon className="h-16 w-16 mx-auto mb-4 opacity-50" />
+                {user?.role === 'admin' && !selectedUserIdForAdmin
+                  ? <p>Select a user above to see their tracked YouTube videos.</p>
+                  : <p>No YouTube videos to display.</p>
+                }
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </AppLayout>
   );
