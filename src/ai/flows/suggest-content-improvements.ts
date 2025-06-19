@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -17,9 +18,9 @@ const SuggestContentImprovementsInputSchema = z.object({
       title: z.string(),
       likes: z.number(),
       comments: z.number(),
-      shares: z.number(),
+      views: z.number(), // Changed from shares to views
     })
-  ).describe('Array of YouTube video data including title, likes, comments, and shares.'),
+  ).describe('Array of YouTube video data including title, likes, comments, and views.'),
   instagramData: z.array(
     z.object({
       thumbnail: z.string(),
@@ -61,7 +62,7 @@ const prompt = ai.definePrompt({
 
   YouTube Data:
   {{#each youtubeData}}
-  - Title: {{{title}}}, Likes: {{{likes}}}, Comments: {{{comments}}}, Shares: {{{shares}}}
+  - Title: {{{title}}}, Views: {{{views}}}, Likes: {{{likes}}}, Comments: {{{comments}}}
   {{/each}}
 
   Instagram Data:

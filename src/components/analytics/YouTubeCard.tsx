@@ -4,12 +4,13 @@
 import type { YouTubeVideo } from '@/lib/mockData';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import Image from 'next/image';
-import { ThumbsUp, MessageSquare, Eye, Loader2 } from 'lucide-react';
+import { ThumbsUp, MessageSquare, Eye, CalendarDays, Loader2 } from 'lucide-react'; // Added CalendarDays
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import React, { useState } from 'react';
 import { fetchYouTubeComments, type YouTubeComment } from '@/ai/flows/fetch-youtube-comments-flow';
 import CommentDisplay from './CommentDisplay';
 import { Button } from '@/components/ui/button';
+import { formatDistanceToNow } from 'date-fns'; // Added
 
 interface YouTubeCardProps {
   video: YouTubeVideo;
@@ -55,9 +56,17 @@ const YouTubeCard: React.FC<YouTubeCardProps> = ({ video }) => {
         </div>
       </CardHeader>
       <CardContent className="p-4 flex-grow">
-        <CardTitle className="text-base font-semibold mb-1 leading-tight" title={video.title}>
+        <CardTitle className="text-base font-semibold mb-1 leading-tight" title={video.title || 'Untitled Video'}>
           {video.title || "Untitled Video"}
         </CardTitle>
+        <div className="flex items-center text-xs text-muted-foreground mt-1 mb-2">
+          <CalendarDays className="h-3.5 w-3.5 mr-1.5 text-accent" />
+          <span>
+            {video.publishedAt && new Date(video.publishedAt).getFullYear() > 1970 // Check if not epoch
+              ? formatDistanceToNow(new Date(video.publishedAt), { addSuffix: true })
+              : 'Date N/A'}
+          </span>
+        </div>
         <div className="grid grid-cols-3 gap-2 text-sm text-muted-foreground mt-2">
           <div className="flex items-center">
             <Eye className="h-4 w-4 mr-1.5 text-primary" />
@@ -70,7 +79,7 @@ const YouTubeCard: React.FC<YouTubeCardProps> = ({ video }) => {
           
           <Popover open={isCommentsPopoverOpen} onOpenChange={(open) => {
             setIsCommentsPopoverOpen(open);
-            if (open && commentsData.length === 0 && !isCommentsLoading && !commentsError) { // Fetch only if opening and no data/error yet
+            if (open && commentsData.length === 0 && !isCommentsLoading && !commentsError) { 
               handleFetchComments();
             }
           }}>
@@ -89,9 +98,10 @@ const YouTubeCard: React.FC<YouTubeCardProps> = ({ video }) => {
               />
             </PopoverContent>
           </Popover>
-
         </div>
       </CardContent>
+      {/* CardFooter can be used if needed in the future */}
+      {/* <CardFooter className="p-3 border-t"></CardFooter> */}
     </Card>
   );
 };

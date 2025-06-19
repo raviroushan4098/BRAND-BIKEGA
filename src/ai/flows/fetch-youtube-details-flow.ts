@@ -9,9 +9,9 @@
  */
 
 import { ai } from '@/ai/genkit';
-import { z } from 'zod'; // Changed from 'genkit/zod'
+import { z } from 'zod'; 
 import { getVideoStatistics } from '@/lib/youtubeApiService';
-import type { YouTubeVideo } from '@/lib/mockData'; // Using for structure
+import type { YouTubeVideo } from '@/lib/mockData'; 
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query, where, limit } from 'firebase/firestore';
 
@@ -19,9 +19,10 @@ const YouTubeVideoSchema = z.object({
   id: z.string(),
   title: z.string(),
   thumbnailUrl: z.string(),
-  views: z.number().optional().default(0), // Made optional with default for robustness
+  views: z.number().optional().default(0),
   likes: z.number().optional().default(0),
   comments: z.number().optional().default(0),
+  publishedAt: z.string(), // Added publishedAt, made required
 });
 
 const FetchYouTubeDetailsInputSchema = z.object({
@@ -52,7 +53,6 @@ async function getYouTubeApiKeyFromFirestore(): Promise<string | null> {
     return apiKeyData.keyValue as string;
   } catch (error) {
     console.error("Error fetching YouTube API key from Firestore:", error);
-    // Do not throw here, let the flow handle the null key
     return null;
   }
 }
@@ -70,25 +70,21 @@ const fetchYouTubeDetailsFlow = ai.defineFlow(
   async ({ videoIds }) => {
     const apiKey = await getYouTubeApiKeyFromFirestore();
     if (!apiKey) {
-      // If API key is critical and not found, throw an error or return empty videos
-      // For now, let's throw an error so the calling function knows.
       throw new Error('YouTube API key is not configured or could not be retrieved.');
     }
 
-    // The getVideoStatistics function from youtubeApiService returns Partial<YouTubeVideo>[]
-    // We need to ensure the objects conform to YouTubeVideoSchema for the output.
     const fetchedVideosData = await getVideoStatistics(videoIds, apiKey);
     
     const validatedVideos: z.infer<typeof YouTubeVideoSchema>[] = [];
     for (const videoData of fetchedVideosData) {
-        // Ensure data conforms to schema, providing defaults for missing optional fields
         const video: z.infer<typeof YouTubeVideoSchema> = {
-            id: videoData.id || 'unknown_id', // Provide fallback for zod validation
+            id: videoData.id || 'unknown_id', 
             title: videoData.title || 'Untitled Video',
             thumbnailUrl: videoData.thumbnailUrl || 'https://placehold.co/320x180.png?text=No+Thumbnail',
             views: videoData.views || 0,
             likes: videoData.likes || 0,
             comments: videoData.comments || 0,
+            publishedAt: videoData.publishedAt || new Date(0).toISOString(), // Default to epoch if missing
         };
         validatedVideos.push(video);
     }
@@ -96,4 +92,3 @@ const fetchYouTubeDetailsFlow = ai.defineFlow(
     return { videos: validatedVideos };
   }
 );
-

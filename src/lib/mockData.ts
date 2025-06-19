@@ -5,8 +5,8 @@ export interface YouTubeVideo {
   thumbnailUrl: string;
   likes: number;
   comments: number;
-  // shares: number; // Shares removed as it's not directly available from YouTube Data API v3 videos endpoint
   views: number;
+  publishedAt: string; // Added
 }
 
 export interface InstagramPost {
@@ -25,8 +25,8 @@ export const mockYouTubeData: YouTubeVideo[] = [
     thumbnailUrl: 'https://placehold.co/320x180.png?text=Gaming+Montage',
     likes: 1200,
     comments: 345,
-    // shares: 150,
     views: 25000,
+    publishedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days ago
   },
   {
     id: 'vid2',
@@ -34,8 +34,8 @@ export const mockYouTubeData: YouTubeVideo[] = [
     thumbnailUrl: 'https://placehold.co/320x180.png?text=Cooking+Fails',
     likes: 850,
     comments: 210,
-    // shares: 90,
     views: 15000,
+    publishedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days ago
   },
   {
     id: 'vid3',
@@ -43,8 +43,8 @@ export const mockYouTubeData: YouTubeVideo[] = [
     thumbnailUrl: 'https://placehold.co/320x180.png?text=Travel+Vlog',
     likes: 2500,
     comments: 500,
-    // shares: 300,
     views: 50000,
+    publishedAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(), // 14 days ago
   },
   {
     id: 'vid4',
@@ -52,8 +52,8 @@ export const mockYouTubeData: YouTubeVideo[] = [
     thumbnailUrl: 'https://placehold.co/320x180.png?text=Tech+Review',
     likes: 980,
     comments: 180,
-    // shares: 75,
     views: 18000,
+    publishedAt: new Date(Date.now() - 21 * 24 * 60 * 60 * 1000).toISOString(), // 21 days ago
   },
 ];
 

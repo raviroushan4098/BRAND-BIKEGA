@@ -81,15 +81,10 @@ export async function getVideoStatistics(videoIds: string[], apiKey: string): Pr
       views: parseInt(item.statistics.viewCount, 10) || 0,
       likes: parseInt(item.statistics.likeCount || "0", 10) || 0,
       comments: parseInt(item.statistics.commentCount || "0", 10) || 0,
-      // Shares are not available directly, so we omit it or set to a default if the interface requires it.
-      // The YouTubeVideo interface will be updated to reflect this.
+      publishedAt: item.snippet.publishedAt, // Added publishedAt
     }));
   } catch (error) {
     console.error('Error fetching video statistics:', error);
-    // Return partial data or empty for resilience, or re-throw
-    // For now, let's return an empty object for failed items or filter them out
-    // To make it simple, if the whole request fails, we re-throw.
-    // Individual video errors are not handled here, API returns what it can.
     throw error;
   }
 }

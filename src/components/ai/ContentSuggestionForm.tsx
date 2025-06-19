@@ -43,8 +43,18 @@ const ContentSuggestionForm = () => {
 
     // Prepare data for the AI flow using mock data
     const aiInput: SuggestContentImprovementsInput = {
-      youtubeData: mockYouTubeData.map(v => ({ title: v.title, likes: v.likes, comments: v.comments, shares: v.shares })),
-      instagramData: mockInstagramData.map(p => ({ thumbnail: p.thumbnailUrl, likes: p.likes, comments: p.comments, timestamp: p.timestamp })),
+      youtubeData: mockYouTubeData.map(v => ({ 
+        title: v.title, 
+        likes: v.likes, 
+        comments: v.comments, 
+        views: v.views  // Changed from shares to views
+      })),
+      instagramData: mockInstagramData.map(p => ({ 
+        thumbnail: p.thumbnailUrl, 
+        likes: p.likes, 
+        comments: p.comments, 
+        timestamp: p.timestamp 
+      })),
       userRole: data.userRole,
     };
 
@@ -61,8 +71,7 @@ const ContentSuggestionForm = () => {
     }
   };
 
-  // Placeholder for "substantial analytics collection period"
-  const canActivateTool = true; // Set to false to show the message
+  const canActivateTool = true; 
 
   if (!canActivateTool) {
     return (
@@ -90,7 +99,6 @@ const ContentSuggestionForm = () => {
       </CardHeader>
       <form onSubmit={form.handleSubmit(onSubmit)}>
         <CardContent className="space-y-6">
-          {/* User role input is hidden and taken from auth, or can be a select if needed */}
            {error && (
             <Alert variant="destructive">
               <AlertTitle>Error</AlertTitle>
