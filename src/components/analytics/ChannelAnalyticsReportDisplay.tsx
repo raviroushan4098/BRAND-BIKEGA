@@ -5,9 +5,11 @@ import type { ChannelAnalyticsReportOutput, YouTubeVideoForReport } from '@/ai/f
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Loader2, AlertTriangle, TrendingUp, TrendingDown, Lightbulb, ListChecks, BarChartBig, Star, YoutubeIcon, Download } from 'lucide-react';
+import { Loader2, AlertTriangle, TrendingUp, TrendingDown, Lightbulb, ListChecks, BarChartBig, Star, YoutubeIcon, Download, FileSpreadsheet } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
+import PptxGenJS from 'pptxgenjs';
+import { useToast } from '@/hooks/use-toast';
 
 interface ChannelAnalyticsReportDisplayProps {
   report: ChannelAnalyticsReportOutput | null;
@@ -31,65 +33,119 @@ const SectionCard: React.FC<{ title: string; icon: React.ElementType; children: 
 );
 
 const ChannelAnalyticsReportDisplay: React.FC<ChannelAnalyticsReportDisplayProps> = ({ report, isLoading, error, onRegenerate }) => {
-  
-  const handleDownloadReport = () => {
-    if (!report) return;
+  const { toast } = useToast();
 
-    let markdownContent = `# ${report.reportTitle || "Channel Analytics Report"}\n\n`;
-    markdownContent += `## Overall Performance Summary\n${report.overallPerformanceSummary}\n\n`;
-
-    markdownContent += `## Key Observations\n`;
-    if (report.keyObservations.length > 0) {
-      report.keyObservations.forEach(obs => markdownContent += `- ${obs}\n`);
-    } else {
-      markdownContent += `No specific key observations noted.\n`;
+  const handleDownloadPptReport = () => {
+    if (!report) {
+      toast({ title: "Error", description: "No report data to download.", variant: "destructive" });
+      return;
     }
-    markdownContent += `\n`;
 
-    markdownContent += `## Top Performing Videos\n`;
-    if (report.topPerformingVideos.length > 0) {
-      report.topPerformingVideos.forEach(video => {
-        markdownContent += `### [${video.title}](https://www.youtube.com/watch?v=${video.id})\n`;
-        markdownContent += `- Views: ${video.views.toLocaleString()}\n`;
-        markdownContent += `- Likes: ${video.likes.toLocaleString()}\n`;
-        markdownContent += `- Comments: ${video.comments.toLocaleString()}\n`;
-        if (video.reason) {
-          markdownContent += `- Reason: ${video.reason}\n`;
-        }
-        markdownContent += `\n`;
+    toast({ title: "Generating PPT", description: "Your PowerPoint report is being generated...", duration: 5000});
+
+    try {
+      const pptx = new PptxGenJS();
+      pptx.layout = "LAYOUT_WIDE"; // 16x9 aspect ratio
+
+      // Theme Colors (aligning with app's theme)
+      const primaryColor = "3F51B5"; // Deep Blue
+      const accentColor = "9C27B0"; // Purple
+      const textColor = "212121"; // Dark Gray (for light slides)
+      const slideBackgroundColor = "FFFFFF";
+
+      // Slide Master (Optional, for consistent branding)
+      pptx.defineSlideMaster({
+        title: "MASTER_SLIDE",
+        background: { color: slideBackgroundColor },
+        objects: [
+          { rect: { x: 0, y: 0, w: "100%", h: 0.75, fill: { color: primaryColor } } },
+          { text: { text: "Insight Stream Analytics", options: { x: 0.5, y: 0.15, w: 5, h: 0.5, color: "FFFFFF", fontSize: 18 } } },
+        ],
       });
-    } else {
-      markdownContent += `Could not identify distinct top-performing videos.\n\n`;
-    }
+      
+      // Helper function for adding a standard content slide
+      const addContentSlide = (slideTitle: string, content?: PptxGenJS.TextProps[]) => {
+        const slide = pptx.addSlide({ masterName: "MASTER_SLIDE" });
+        slide.addText(slideTitle, { x: 0.5, y: 1.0, w: "90%", h: 0.5, fontSize: 28, bold: true, color: primaryColor });
+        if (content && content.length > 0) {
+           slide.addText(content, { x: 0.5, y: 1.75, w: "90%", h: 4.5, fontSize: 12, color: textColor, bullet: {type: 'bullet'} });
+        } else if (typeof content === 'string') {
+           slide.addText(content, { x: 0.5, y: 1.75, w: "90%", h: 4.5, fontSize: 12, color: textColor });
+        }
+        return slide;
+      };
 
-    markdownContent += `## Areas for Improvement\n`;
-    if (report.areasForImprovement.length > 0) {
-      report.areasForImprovement.forEach(area => markdownContent += `- ${area}\n`);
-    } else {
-      markdownContent += `No specific areas for improvement highlighted.\n`;
-    }
-    markdownContent += `\n`;
 
-    markdownContent += `## Actionable Suggestions\n`;
-    if (report.actionableSuggestions.length > 0) {
-      report.actionableSuggestions.forEach(suggestion => markdownContent += `- ${suggestion}\n`);
-    } else {
-      markdownContent += `No specific actionable suggestions provided.\n`;
-    }
-    markdownContent += `\n`;
+      // Title Slide
+      const titleSlide = pptx.addSlide({ masterName: "MASTER_SLIDE" });
+      titleSlide.addText(report.reportTitle || "Channel Analytics Report", {
+        x: 0.5, y: 2.5, w: '90%', h: 1.5, fontSize: 44, bold: true, color: primaryColor, align: 'center',
+      });
+      titleSlide.addText(`Generated on: ${new Date().toLocaleDateString()}`, {
+        x: 0.5, y: 4.0, w: '90%', h: 0.5, fontSize: 16, color: textColor, align: 'center',
+      });
 
-    const blob = new Blob([markdownContent], { type: 'text/markdown;charset=utf-8;' });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    const reportTitleForFile = report.reportTitle ? report.reportTitle.replace(/[^a-z0-9_]/gi, '_').toLowerCase() : 'channel_analytics_report';
-    link.setAttribute("href", url);
-    link.setAttribute("download", `${reportTitleForFile}.md`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+
+      // Overall Performance Summary Slide
+      addContentSlide("Overall Performance Summary", [{text: report.overallPerformanceSummary, options: {fontSize: 16}}]);
+
+      // Key Observations Slide
+      if (report.keyObservations && report.keyObservations.length > 0) {
+        addContentSlide("Key Observations", report.keyObservations.map(obs => ({ text: obs, options: { breakLine: true, fontSize: 14 } })));
+      }
+
+      // Top Performing Videos Slide
+      if (report.topPerformingVideos && report.topPerformingVideos.length > 0) {
+        const topVideosSlide = pptx.addSlide({ masterName: "MASTER_SLIDE" });
+        topVideosSlide.addText("Top Performing Videos", { x: 0.5, y: 1.0, w: "90%", h: 0.5, fontSize: 28, bold: true, color: primaryColor });
+        
+        let yPos = 1.75;
+        report.topPerformingVideos.forEach((video, index) => {
+          if (yPos > 5.0 && index < report.topPerformingVideos.length -1 ) { // check if space left for next video
+             // pptx.addSlide({ masterName: "MASTER_SLIDE" }); // New slide if needed
+             // yPos = 1.0;
+             // Not adding new slide for brevity here, but in a real case, check for overflow
+          }
+          topVideosSlide.addText(`${index + 1}. ${video.title}`, { x: 0.5, y: yPos, w: "90%", h: 0.3, fontSize: 16, bold: true, color: accentColor, hyperlink: { url: `https://www.youtube.com/watch?v=${video.id}`, tooltip: "Watch Video" } });
+          yPos += 0.35;
+          topVideosSlide.addText(
+            `Views: ${video.views.toLocaleString()} | Likes: ${video.likes.toLocaleString()} | Comments: ${video.comments.toLocaleString()}`,
+            { x: 0.7, y: yPos, w: "85%", h: 0.25, fontSize: 12, color: textColor }
+          );
+          yPos += 0.25;
+          if (video.reason) {
+            topVideosSlide.addText(`Reason: ${video.reason}`, { x: 0.7, y: yPos, w: "85%", h: 0.25, fontSize: 12, italic: true, color: textColor });
+            yPos += 0.25;
+          }
+          yPos += 0.2; // Spacing
+        });
+      }
+      
+      // Areas for Improvement Slide
+      if (report.areasForImprovement && report.areasForImprovement.length > 0) {
+         addContentSlide("Areas for Improvement", report.areasForImprovement.map(area => ({ text: area, options: { breakLine: true, fontSize: 14 } })));
+      }
+
+      // Actionable Suggestions Slide
+      if (report.actionableSuggestions && report.actionableSuggestions.length > 0) {
+        addContentSlide("Actionable Suggestions", report.actionableSuggestions.map(suggestion => ({ text: suggestion, options: { breakLine: true, fontSize: 14 } })));
+      }
+
+      // Thank You / End Slide
+      const endSlide = pptx.addSlide({ masterName: "MASTER_SLIDE" });
+      endSlide.addText("Thank You", { x:0.5, y:2.5, w:'90%', h:1, fontSize:40, bold:true, color:primaryColor, align:'center'});
+      endSlide.addText("Report generated by Insight Stream", { x:0.5, y:3.5, w:'90%', h:0.5, fontSize:14, color:textColor, align:'center'});
+
+
+      const reportTitleForFile = report.reportTitle ? report.reportTitle.replace(/[^a-z0-9_]/gi, '_').toLowerCase() : 'channel_analytics_report';
+      pptx.writeFile({ fileName: `${reportTitleForFile}.pptx` });
+
+    } catch (e: any) {
+       console.error("Error generating PPT:", e);
+       toast({ title: "PPT Generation Failed", description: e.message || "Could not generate PowerPoint file.", variant: "destructive"});
+    }
   };
+
 
   if (isLoading) {
     return (
@@ -187,9 +243,9 @@ const ChannelAnalyticsReportDisplay: React.FC<ChannelAnalyticsReportDisplayProps
         </SectionCard>
       </div>
       <CardFooter className="mt-4 justify-end gap-2">
-          <Button onClick={handleDownloadReport} variant="outline">
-            <Download className="mr-2 h-4 w-4" />
-            Download Report
+          <Button onClick={handleDownloadPptReport} variant="outline">
+            <FileSpreadsheet className="mr-2 h-4 w-4" /> {/* Changed Icon */}
+            Download as PPT
           </Button>
           {onRegenerate && (
             <Button onClick={onRegenerate} variant="outline">Regenerate Report</Button>

@@ -23,7 +23,7 @@ import {
 import { toast } from '@/hooks/use-toast';
 import {
   BarChart3, UserPlus, LinkIcon, FileText, UploadCloud, Users, DownloadCloud, Loader2, YoutubeIcon, Eye, ThumbsUp, MessageSquare, ListVideo,
-  CalendarIcon, ArrowUpDown, XCircle, FilterX, RefreshCw, Download
+  CalendarIcon, ArrowUpDown, XCircle, FilterX, RefreshCw
 } from 'lucide-react';
 import { Skeleton } from "@/components/ui/skeleton";
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -359,55 +359,6 @@ export default function YouTubeManagementPage() {
     </div>
   );
 
-  const escapeCsvCell = (cellData: string | number | undefined | null): string => {
-    if (cellData === undefined || cellData === null) {
-        return '';
-    }
-    const stringData = String(cellData);
-    // If the string contains a comma, newline, or double quote, enclose it in double quotes
-    // and escape any existing double quotes by doubling them (e.g., " becomes "")
-    if (stringData.includes(',') || stringData.includes('\n') || stringData.includes('"')) {
-        return `"${stringData.replace(/"/g, '""')}"`;
-    }
-    return stringData;
-  };
-
-  const handleDownloadVideoListCsv = () => {
-    if (videosToDisplay.length === 0) {
-      toast({ title: "No Data", description: "There are no videos to download.", variant: "default" });
-      return;
-    }
-
-    const headers = ["Video ID", "Title", "Published Date", "Views", "Likes", "Comments", "Thumbnail URL"];
-    const csvRows = [
-      headers.join(','),
-      ...videosToDisplay.map(video => [
-        escapeCsvCell(video.id),
-        escapeCsvCell(video.title),
-        escapeCsvCell(video.publishedAt ? format(new Date(video.publishedAt), "yyyy-MM-dd HH:mm:ss") : 'N/A'),
-        escapeCsvCell(video.views),
-        escapeCsvCell(video.likes),
-        escapeCsvCell(video.comments),
-        escapeCsvCell(video.thumbnailUrl)
-      ].join(','))
-    ];
-    const csvContent = csvRows.join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    if (link.download !== undefined) {
-      const url = URL.createObjectURL(blob);
-      const fileName = `youtube_videos_list_${new Date().toISOString().split('T')[0]}.csv`;
-      link.setAttribute("href", url);
-      link.setAttribute("download", fileName);
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-      toast({ title: "Download Started", description: `Downloading ${fileName}`});
-    }
-  };
-
 
   return (
     <AppLayout>
@@ -564,10 +515,7 @@ export default function YouTubeManagementPage() {
                 }
               </CardDescription>
             </div>
-            <Button onClick={handleDownloadVideoListCsv} variant="outline" size="sm" disabled={videosToDisplay.length === 0 || isRefreshing || isLoadingVideos}>
-              <Download className="mr-2 h-4 w-4" />
-              Download List (CSV)
-            </Button>
+            {/* Removed Download List (CSV) button from here */}
           </CardHeader>
           <CardContent>
             {(isLoadingVideos && !isRefreshing) ? ( <div className="flex justify-center items-center py-10"> <Loader2 className="h-12 w-12 animate-spin text-primary" /> </div> ) 
@@ -585,4 +533,3 @@ export default function YouTubeManagementPage() {
     </AppLayout>
   );
 }
-
