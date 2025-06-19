@@ -24,12 +24,12 @@ const YouTubeVideoSchema = z.object({
   comments: z.number().optional().default(0),
 });
 
-export const FetchYouTubeDetailsInputSchema = z.object({
+const FetchYouTubeDetailsInputSchema = z.object({
   videoIds: z.array(z.string()).min(1, "At least one video ID is required."),
 });
 export type FetchYouTubeDetailsInput = z.infer<typeof FetchYouTubeDetailsInputSchema>;
 
-export const FetchYouTubeDetailsOutputSchema = z.object({
+const FetchYouTubeDetailsOutputSchema = z.object({
   videos: z.array(YouTubeVideoSchema),
 });
 export type FetchYouTubeDetailsOutput = z.infer<typeof FetchYouTubeDetailsOutputSchema>;
