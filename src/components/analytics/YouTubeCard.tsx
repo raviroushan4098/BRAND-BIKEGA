@@ -4,13 +4,13 @@
 import type { YouTubeVideo } from '@/lib/mockData';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import Image from 'next/image';
-import { ThumbsUp, MessageSquare, Eye, CalendarDays, Loader2 } from 'lucide-react'; // Added CalendarDays
+import { ThumbsUp, MessageSquare, Eye, CalendarDays, Loader2 } from 'lucide-react'; 
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import React, { useState } from 'react';
 import { fetchYouTubeComments, type YouTubeComment } from '@/ai/flows/fetch-youtube-comments-flow';
 import CommentDisplay from './CommentDisplay';
 import { Button } from '@/components/ui/button';
-import { formatDistanceToNow } from 'date-fns'; // Added
+import { formatDistanceToNow } from 'date-fns'; 
 
 interface YouTubeCardProps {
   video: YouTubeVideo;
@@ -62,7 +62,7 @@ const YouTubeCard: React.FC<YouTubeCardProps> = ({ video }) => {
         <div className="flex items-center text-xs text-muted-foreground mt-1 mb-2">
           <CalendarDays className="h-3.5 w-3.5 mr-1.5 text-accent" />
           <span>
-            {video.publishedAt && new Date(video.publishedAt).getFullYear() > 1970 // Check if not epoch
+            {video.publishedAt && new Date(video.publishedAt).getFullYear() > 1970 
               ? formatDistanceToNow(new Date(video.publishedAt), { addSuffix: true })
               : 'Date N/A'}
           </span>
@@ -107,3 +107,4 @@ const YouTubeCard: React.FC<YouTubeCardProps> = ({ video }) => {
 };
 
 export default YouTubeCard;
+

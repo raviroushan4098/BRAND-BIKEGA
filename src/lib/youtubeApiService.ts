@@ -81,10 +81,11 @@ export async function getVideoStatistics(videoIds: string[], apiKey: string): Pr
       views: parseInt(item.statistics.viewCount, 10) || 0,
       likes: parseInt(item.statistics.likeCount || "0", 10) || 0,
       comments: parseInt(item.statistics.commentCount || "0", 10) || 0,
-      publishedAt: item.snippet.publishedAt, // Added publishedAt
+      publishedAt: item.snippet.publishedAt, 
     }));
   } catch (error) {
     console.error('Error fetching video statistics:', error);
     throw error;
   }
 }
+
