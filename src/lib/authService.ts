@@ -8,7 +8,7 @@ import {
 export interface User {
   id: string; // Firestore document ID
   email: string;
-  password: string; // Storing plaintext passwords - HIGHLY INSECURE
+  password: string; // Storing plaintext passwords
   role: 'user' | 'admin';
   name: string;
   lastLogin: string; // ISO string
@@ -18,7 +18,7 @@ export interface User {
 // Fetch user profile from Firestore by email (for direct login)
 const fetchUserProfileByEmail = async (email: string): Promise<User | null> => {
   const usersRef = collection(db, 'users');
-  const q = query(usersRef, where("email", "==", email.toLowerCase()), limit(1)); // Query with lowercase email
+  const q = query(usersRef, where("email", "==", email.toLowerCase()), limit(1));
   const querySnapshot = await getDocs(q);
 
   if (querySnapshot.empty) {
@@ -31,17 +31,17 @@ const fetchUserProfileByEmail = async (email: string): Promise<User | null> => {
 };
 
 
-// INSECURE LOGIN METHOD: Checks credentials directly against Firestore
+// LOGIN METHOD: Checks credentials directly against Firestore
 export const loginWithEmailPassword = async (email: string, passwordInput: string): Promise<User | null> => {
-  console.log(`[AuthService-Debug] Attempting direct Firestore login for email: '${email}' with input password: '${passwordInput}' (INSECURE)`);
+  console.log(`[AuthService-Debug] Attempting direct Firestore login for email: '${email}'`);
   try {
-    const userProfile = await fetchUserProfileByEmail(email); // Email is already lowercased by fetchUserProfileByEmail
+    const userProfile = await fetchUserProfileByEmail(email); 
 
     if (userProfile) {
-      console.log(`[AuthService-Debug] User profile found in Firestore for '${userProfile.email}'. Stored password: '${userProfile.password}'`);
-      console.log(`[AuthService-Debug] Comparing input password '${passwordInput}' with stored password '${userProfile.password}'`);
+      console.log(`[AuthService-Debug] User profile found in Firestore for '${userProfile.email}'. Stored password: '${userProfile.password}' (Actual stored value).`);
+      console.log(`[AuthService-Debug] Comparing input password '${passwordInput}' with stored password.`);
 
-      if (userProfile.password === passwordInput) { // Plaintext password comparison - HIGHLY INSECURE
+      if (userProfile.password === passwordInput) { 
         console.log("[AuthService-Debug] Passwords match. Updating lastLogin.");
         const userRef = doc(db, 'users', userProfile.id);
         const lastLoginTime = new Date().toISOString();
@@ -84,9 +84,8 @@ export const getAllUsers = async (): Promise<User[]> => {
 };
 
 export const adminCreateUser = async (userData: Omit<User, 'id' | 'lastLogin'>): Promise<User | null> => {
-  console.warn("[AuthService-Admin] CRITICAL SECURITY WARNING: Creating user profile with password stored in PLAINTEXT in Firestore. This is highly insecure.");
   try {
-    const emailToStore = userData.email.toLowerCase(); // Store email in lowercase
+    const emailToStore = userData.email.toLowerCase(); 
     const existingUser = await fetchUserProfileByEmail(emailToStore);
     if (existingUser) {
       console.error(`[AuthService] Error creating user profile: Email '${emailToStore}' already exists in Firestore.`);
@@ -96,19 +95,18 @@ export const adminCreateUser = async (userData: Omit<User, 'id' | 'lastLogin'>):
     const newUserId = doc(collection(db, 'users')).id;
     const newUserProfile: User = {
       id: newUserId,
-      email: emailToStore, // Save lowercase email
-      password: userData.password, // Storing plaintext password from form
+      email: emailToStore, 
+      password: userData.password, // Storing password from form
       name: userData.name,
       role: userData.role,
       lastLogin: new Date(0).toISOString(),
       trackedChannels: userData.trackedChannels || { youtube: [], instagram: [] },
     };
 
-    // Log the object that will be saved to Firestore for debugging
-    console.log("[AuthService-Admin] Saving new user profile to Firestore:", JSON.stringify(newUserProfile, null, 2));
+    console.log("[AuthService-Admin] Saving new user profile to Firestore:", JSON.stringify(newUserProfile, (key, value) => key === 'password' ? '***REDACTED***' : value, 2));
 
     await setDoc(doc(db, 'users', newUserId), newUserProfile);
-    console.log(`[ADMIN ACTION] Created user PROFILE in Firestore for ${emailToStore} (ID: ${newUserId}). Password stored in plaintext. This is INSECURE.`);
+    console.log(`[ADMIN ACTION] Created user PROFILE in Firestore for ${emailToStore} (ID: ${newUserId}).`);
     return newUserProfile;
   } catch (error) {
     console.error('[AuthService] Error creating user profile in Firestore (admin):', error);
@@ -120,19 +118,17 @@ export const adminCreateUser = async (userData: Omit<User, 'id' | 'lastLogin'>):
 };
 
 export const adminUpdateUser = async (userId: string, userData: Partial<Omit<User, 'id' | 'email'>>): Promise<boolean> => {
-  console.warn(`[AuthService-Admin] Attempting to update user profile ${userId}. If password is changed, it will be stored in PLAINTEXT.`);
   try {
     const userRef = doc(db, 'users', userId);
     const updateData = { ...userData };
 
     if ('password' in updateData && updateData.password && updateData.password.length > 0) {
-      console.warn(`[ADMIN ACTION] Updating password for user ${userId} in plaintext (INSECURE).`);
+      // Password is being updated
     } else {
-      // If password is not provided or is an empty string, remove it from updateData to avoid overwriting with empty.
       delete updateData.password;
     }
-    // Log the object that will be used for updating Firestore for debugging
-    console.log(`[AuthService-Admin] Updating user profile ${userId} in Firestore with:`, JSON.stringify(updateData, null, 2));
+    
+    console.log(`[AuthService-Admin] Updating user profile ${userId} in Firestore with:`, JSON.stringify(updateData, (key, value) => key === 'password' ? '***REDACTED***' : value, 2));
 
     await updateDoc(userRef, updateData);
     return true;

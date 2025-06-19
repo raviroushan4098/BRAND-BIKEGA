@@ -9,8 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from '@/hooks/use-toast';
-import { BotMessageSquare, Mail, KeyRound, Eye, EyeOff, AlertTriangle } from 'lucide-react';
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { BotMessageSquare, Mail, KeyRound, Eye, EyeOff } from 'lucide-react';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -37,16 +36,13 @@ export default function LoginPage() {
       } else {
         toast({
           title: 'Login Failed',
-          description: 'Invalid email or password. Please check your credentials. This app uses a direct Firestore login (INSECURE).',
+          description: 'Invalid email or password. Please check your credentials.',
           variant: 'destructive'
         });
       }
     } catch (error: any) {
       console.error("Login page error (direct Firestore):", error);
-      let description = 'An unexpected error occurred during login. This app uses a direct Firestore login (INSECURE).';
-      // The error from direct Firestore login might not have a specific message like "auth/invalid-credential"
-      // It might be a generic error if the query fails, or null if credentials don't match.
-      // The authService handles logging specific reasons (user not found, password mismatch).
+      let description = 'An unexpected error occurred during login.';
       if (error && error.message) {
         description = `Error: ${error.message}`;
       }
@@ -74,14 +70,6 @@ export default function LoginPage() {
           <CardDescription>
             Access your social media analytics.
           </CardDescription>
-           <Alert variant="destructive" className="mt-4 text-left">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertTitle className="font-semibold">CRITICAL SECURITY RISK</AlertTitle>
-                <AlertDescription>
-                This application is configured to use a direct Firestore login method.
-                Passwords are stored and checked in plaintext, which is extremely insecure and should never be used in production environments.
-                </AlertDescription>
-            </Alert>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-6">

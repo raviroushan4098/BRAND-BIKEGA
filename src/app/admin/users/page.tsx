@@ -7,7 +7,7 @@ import UserTable from '@/components/admin/UserTable';
 import CreateUserForm from '@/components/admin/CreateUserForm';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { PlusCircle, Users, RefreshCw, AlertTriangle } from 'lucide-react';
+import { PlusCircle, Users, RefreshCw } from 'lucide-react';
 import type { User } from '@/lib/authService';
 import {
   getAllUsers as apiGetAllUsers,
@@ -16,7 +16,6 @@ import {
   adminDeleteUser as apiAdminDeleteUser
 } from '@/lib/authService';
 import { toast } from '@/hooks/use-toast';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export default function UserManagementPage() {
   const [users, setUsers] = useState<User[]>([]);
@@ -72,7 +71,6 @@ export default function UserManagementPage() {
     setIsLoading(true);
     if (currentUserId) {
       // Update user profile in Firestore
-      // Ensure sensitive fields like email of specific users are not changed
       const originalUser = users.find(u => u.id === currentUserId);
       if (originalUser && originalUser.email === "davbhagalpur52@gmail.com" && userData.email !== "davbhagalpur52@gmail.com") {
           toast({ title: "Error", description: "Cannot change email of the demo admin user.", variant: "destructive" });
@@ -82,11 +80,9 @@ export default function UserManagementPage() {
       }
       
       const updatePayload = { ...userData };
-      // Retain original email if it's an edit action, as email is not supposed to be editable via this form.
       if (originalUser) {
         updatePayload.email = originalUser.email;
       }
-
 
       const success = await apiAdminUpdateUser(currentUserId, updatePayload);
       if (success) {
@@ -96,14 +92,13 @@ export default function UserManagementPage() {
         toast({ title: "Error", description: "Failed to update user profile.", variant: "destructive" });
       }
     } else {
-      // Create user profile in Firestore (userData includes INSECURE plaintext password)
+      // Create user profile in Firestore (userData includes password)
       try {
         const newUserProfile = await apiAdminCreateUser(userData as Omit<User, 'id' | 'lastLogin'>);
         if (newUserProfile) {
           await fetchUsers();
-          toast({ title: "User Profile Created (INSECURE)", description: `${newUserProfile.name}'s profile (with plaintext password) has been added to Firestore.` });
+          toast({ title: "User Profile Created", description: `${newUserProfile.name}'s profile has been added to Firestore.` });
         } else {
-          // apiAdminCreateUser throws an error if email exists, or returns null on other failures
           toast({ title: "Error", description: "Failed to create user profile in Firestore. The email might already exist.", variant: "destructive" });
         }
       } catch (error: any) {
@@ -134,19 +129,8 @@ export default function UserManagementPage() {
               </div>
             </div>
             <CardDescription>
-              Manage user profiles stored in Firestore.
-              <br/>
-              <span className="text-destructive text-xs font-semibold">WARNING:</span> User login is now direct via Firestore, storing passwords in plaintext. This is highly insecure.
+              Manage user profiles stored in Firestore. Users are logged in by checking credentials directly against this data.
             </CardDescription>
-             <Alert variant="destructive" className="mt-4">
-                <AlertTriangle className="h-4 w-4" />
-                <AlertTitle className="font-semibold">CRITICAL SECURITY RISK</AlertTitle>
-                <AlertDescription>
-                The authentication system has been modified to use direct Firestore login.
-                This means passwords are being stored and checked in plaintext, which is extremely insecure and should never be used in production.
-                Ensure all users in Firestore have a 'password' field for this system to work.
-                </AlertDescription>
-            </Alert>
           </CardHeader>
         </Card>
 
