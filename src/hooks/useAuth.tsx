@@ -43,8 +43,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const login = async (email: string, password: string): Promise<boolean> => {
     console.log(`Attempting login for email: '${email}'`); 
-    // IMPORTANT: Logging passwords is a security risk. Remove this after debugging.
-    console.log(`Attempting login with password: '${password}' (REMOVE THIS LOG)`); 
+    // REMOVED: console.log(`Attempting login with password: '${password}' (REMOVE THIS LOG)`); 
     setIsLoading(true);
     const loggedInUser = await apiLogin(email, password);
     if (loggedInUser) {
