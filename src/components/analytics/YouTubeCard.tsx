@@ -4,13 +4,14 @@
 import type { YouTubeVideo } from '@/lib/mockData';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import Image from 'next/image';
-import { ThumbsUp, MessageSquare, Eye, CalendarDays, Loader2 } from 'lucide-react'; 
+import { ThumbsUp, MessageSquare, Eye, CalendarDays, Link as LinkIcon } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import React, { useState } from 'react';
 import { fetchYouTubeComments, type YouTubeComment } from '@/ai/flows/fetch-youtube-comments-flow';
 import CommentDisplay from './CommentDisplay';
 import { Button } from '@/components/ui/button';
-import { formatDistanceToNow } from 'date-fns'; 
+import { formatDistanceToNow } from 'date-fns';
+import NextLink from 'next/link'; // Using NextLink for consistency, though an <a> tag is also fine for external links
 
 interface YouTubeCardProps {
   video: YouTubeVideo;
@@ -41,6 +42,8 @@ const YouTubeCard: React.FC<YouTubeCardProps> = ({ video }) => {
     }
   };
 
+  const videoUrl = `https://www.youtube.com/watch?v=${video.id}`;
+
   return (
     <Card className="overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 flex flex-col">
       <CardHeader className="p-0">
@@ -56,13 +59,21 @@ const YouTubeCard: React.FC<YouTubeCardProps> = ({ video }) => {
         </div>
       </CardHeader>
       <CardContent className="p-4 flex-grow">
-        <CardTitle className="text-base font-semibold mb-1 leading-tight" title={video.title || 'Untitled Video'}>
-          {video.title || "Untitled Video"}
-        </CardTitle>
+        <a
+          href={videoUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="hover:underline focus:outline-none focus:ring-2 focus:ring-ring rounded-sm"
+          aria-label={`Watch video: ${video.title || 'Untitled Video'}`}
+        >
+          <CardTitle className="text-base font-semibold mb-1 leading-tight line-clamp-2">
+            {video.title || "Untitled Video"}
+          </CardTitle>
+        </a>
         <div className="flex items-center text-xs text-muted-foreground mt-1 mb-2">
           <CalendarDays className="h-3.5 w-3.5 mr-1.5 text-accent" />
           <span>
-            {video.publishedAt && new Date(video.publishedAt).getFullYear() > 1970 
+            {video.publishedAt && new Date(video.publishedAt).getFullYear() > 1970
               ? formatDistanceToNow(new Date(video.publishedAt), { addSuffix: true })
               : 'Date N/A'}
           </span>
@@ -76,20 +87,20 @@ const YouTubeCard: React.FC<YouTubeCardProps> = ({ video }) => {
             <ThumbsUp className="h-4 w-4 mr-1.5 text-green-500" />
             {video.likes?.toLocaleString() || '0'}
           </div>
-          
+
           <Popover open={isCommentsPopoverOpen} onOpenChange={(open) => {
             setIsCommentsPopoverOpen(open);
-            if (open && commentsData.length === 0 && !isCommentsLoading && !commentsError) { 
+            if (open && commentsData.length === 0 && !isCommentsLoading && !commentsError) {
               handleFetchComments();
             }
           }}>
             <PopoverTrigger asChild>
-              <Button variant="ghost" className="flex items-center p-0 h-auto justify-start hover:bg-transparent text-muted-foreground hover:text-blue-600">
+              <Button variant="ghost" className="flex items-center p-0 h-auto justify-start hover:bg-transparent text-muted-foreground hover:text-blue-600 focus-visible:ring-offset-0 focus-visible:ring-0">
                 <MessageSquare className="h-4 w-4 mr-1.5 text-blue-500" />
                 {video.comments?.toLocaleString() || '0'}
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-80 max-h-96 overflow-y-auto" side="bottom" align="start">
+            <PopoverContent className="w-80 max-h-96" side="bottom" align="start">
               <CommentDisplay
                 comments={commentsData}
                 isLoading={isCommentsLoading}
@@ -100,11 +111,20 @@ const YouTubeCard: React.FC<YouTubeCardProps> = ({ video }) => {
           </Popover>
         </div>
       </CardContent>
-      {/* CardFooter can be used if needed in the future */}
-      {/* <CardFooter className="p-3 border-t"></CardFooter> */}
+      <CardFooter className="p-3 border-t bg-muted/30">
+         <a
+          href={videoUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center text-xs text-primary hover:underline focus:outline-none focus:ring-1 focus:ring-ring rounded-sm"
+          aria-label={`Open video on YouTube: ${video.title || 'Untitled Video'}`}
+        >
+          <LinkIcon className="h-3.5 w-3.5 mr-1.5" />
+          Watch on YouTube
+        </a>
+      </CardFooter>
     </Card>
   );
 };
 
 export default YouTubeCard;
-
