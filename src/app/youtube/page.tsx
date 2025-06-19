@@ -12,7 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { useAuth } from '@/hooks/useAuth';
 import type { User } from '@/lib/authService';
-import { getAllUsers as apiGetAllUsers, adminUpdateUser } from '@/lib/authService';
+import { getAllUsers as apiGetAllUsers } from '@/lib/authService';
+import { assignYouTubeLinksToUser } from '@/lib/youtubeLinkService'; // Import the new service
 import { toast } from '@/hooks/use-toast';
 import { BarChart3, UserPlus, LinkIcon, FileText, UploadCloud, Users } from 'lucide-react';
 
@@ -24,21 +25,21 @@ export default function YouTubeManagementPage() {
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const [singleLink, setSingleLink] = useState<string>('');
   const [csvFile, setCsvFile] = useState<File | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
   const [isAssigning, setIsAssigning] = useState(false);
 
   const fetchUsers = useCallback(async () => {
     if (user?.role === 'admin') {
-      setIsLoading(true);
+      setIsLoadingUsers(true);
       try {
         const fetchedUsers = await apiGetAllUsers();
         setUsers(fetchedUsers.filter(u => u.id !== user.id)); // Exclude current admin from list
       } catch (error) {
         toast({ title: "Error Fetching Users", description: "Could not load user data.", variant: "destructive" });
       }
-      setIsLoading(false);
+      setIsLoadingUsers(false);
     }
-  }, [user]);
+  }, [user, toast]);
 
   useEffect(() => {
     fetchUsers();
@@ -87,36 +88,22 @@ export default function YouTubeManagementPage() {
       setIsAssigning(false);
       return;
     }
+    
+    // Ensure uniqueness of links being added now. The service will handle merging with existing.
+    const uniqueNewLinks = Array.from(new Set(newLinks));
 
-    const targetUser = users.find(u => u.id === selectedUserId);
-    if (!targetUser) {
-      toast({ title: "User Not Found", description: "Selected user could not be found.", variant: "destructive" });
-      setIsAssigning(false);
-      return;
-    }
-
-    const currentTrackedChannels = targetUser.trackedChannels || { youtube: [], instagram: [] };
-    const existingYouTubeLinks = currentTrackedChannels.youtube || [];
-    const combinedLinks = Array.from(new Set([...existingYouTubeLinks, ...newLinks])); // Add new, ensure uniqueness
-
-    const success = await adminUpdateUser(selectedUserId, {
-      trackedChannels: {
-        ...currentTrackedChannels,
-        youtube: combinedLinks,
-      }
-    });
+    const success = await assignYouTubeLinksToUser(selectedUserId, uniqueNewLinks);
 
     if (success) {
-      toast({ title: "Links Assigned", description: `Successfully assigned ${newLinks.length} new unique link(s) to ${targetUser.name}.` });
-      // Optionally, refetch users or update local state if displaying assigned links
+      const targetUser = users.find(u => u.id === selectedUserId); // For toast message
+      toast({ title: "Links Assigned", description: `Successfully assigned ${uniqueNewLinks.length} new unique link(s) to ${targetUser?.name || 'the selected user'}.` });
       setSingleLink('');
       setCsvFile(null);
-      // Reset file input visually
       const fileInput = document.getElementById('csv-upload') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
-      fetchUsers(); // Re-fetch users to get updated trackedChannels
+      // Optionally, re-fetch links for the user if displaying them, but not users list unless it changed.
     } else {
-      toast({ title: "Assignment Failed", description: "Could not assign links to the user.", variant: "destructive" });
+      toast({ title: "Assignment Failed", description: "Could not assign links to the user in the 'youtube' collection.", variant: "destructive" });
     }
     setIsAssigning(false);
   };
@@ -140,7 +127,6 @@ export default function YouTubeManagementPage() {
           resolve([]);
           return;
         }
-        // Assuming CSV has one URL per line, or URLs in the first column
         const lines = text.split(/\r\n|\n/);
         const urls = lines.map(line => line.split(',')[0].trim()).filter(Boolean);
         resolve(urls);
@@ -174,19 +160,19 @@ export default function YouTubeManagementPage() {
                 <UserPlus className="h-6 w-6 text-accent" />
                 <CardTitle className="text-2xl font-semibold">Assign YouTube Links to User</CardTitle>
               </div>
-              <CardDescription>Select a user and provide YouTube links to track for them.</CardDescription>
+              <CardDescription>Select a user and provide YouTube links to track for them. Links will be stored under 'youtube/{'{userId}'}/links'.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div>
                 <Label htmlFor="user-select" className="flex items-center mb-2">
                   <Users className="mr-2 h-4 w-4 text-muted-foreground" /> Select User
                 </Label>
-                <Select value={selectedUserId} onValueChange={setSelectedUserId} disabled={isLoading || isAssigning}>
+                <Select value={selectedUserId} onValueChange={setSelectedUserId} disabled={isLoadingUsers || isAssigning}>
                   <SelectTrigger id="user-select" className="w-full md:w-1/2">
                     <SelectValue placeholder="Select a user..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {isLoading ? (
+                    {isLoadingUsers ? (
                       <SelectItem value="loading" disabled>Loading users...</SelectItem>
                     ) : users.length > 0 ? (
                       users.map(u => (
@@ -223,7 +209,7 @@ export default function YouTubeManagementPage() {
                   type="file"
                   accept=".csv"
                   onChange={(e) => setCsvFile(e.target.files ? e.target.files[0] : null)}
-                  className="w-full md:w-1/2 pt-2" // Added padding for file input text visibility
+                  className="w-full md:w-1/2 pt-2"
                   disabled={isAssigning}
                 />
                 <p className="text-xs text-muted-foreground mt-1">CSV should contain one YouTube URL per line, or URLs in the first column.</p>
