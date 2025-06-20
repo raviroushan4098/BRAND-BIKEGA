@@ -116,7 +116,7 @@ const DailyPerformanceChart: React.FC<DailyPerformanceChartProps> = ({
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={350}>
-          <LineChart data={data} margin={{ top: 5, right: 20, left: -20, bottom: 5 }}>
+          <LineChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis
               dataKey={xAxisDataKey}
@@ -131,6 +131,7 @@ const DailyPerformanceChart: React.FC<DailyPerformanceChartProps> = ({
               fontSize={12}
               tickLine={false}
               axisLine={false}
+              domain={[100, 'auto']} // Set Y-axis to start from 100
               tickFormatter={(value) => {
                 if (typeof value !== 'number') return String(value);
                 if (value >= 1000000) {
@@ -167,6 +168,7 @@ const DailyPerformanceChart: React.FC<DailyPerformanceChartProps> = ({
                 strokeWidth={2}
                 dot={{ r: 3, strokeWidth: 1, fill: metric.color }}
                 activeDot={{ r: 5, strokeWidth: 2 }}
+                connectNulls={true} // Connect line over null/undefined data points if any
               />
             ))}
           </LineChart>
