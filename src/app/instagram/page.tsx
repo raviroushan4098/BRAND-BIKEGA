@@ -36,11 +36,11 @@ interface SummaryStats {
   totalLikes: number;
   totalComments: number;
   totalPlays: number;
-  totalReshares: number; // Added for summary
+  totalReshares: number; 
   averageLikesPerPost: number;
   averageCommentsPerPost: number;
   averagePlaysPerPost: number;
-  averageResharesPerPost: number; // Added for summary
+  averageResharesPerPost: number; 
 }
 
 type SortablePostKey = 'postedAt' | 'likes' | 'comments' | 'playCount' | 'reshareCount';
@@ -380,16 +380,7 @@ export default function InstagramAnalyticsPage() {
                 <InstagramUIIcon className="h-8 w-8 text-primary" />
                 <CardTitle className="text-3xl font-bold">Instagram Reel Analytics</CardTitle>
               </div>
-              <Button 
-                onClick={handleRefreshFeed} 
-                disabled={isRefreshing || isLoadingPosts || !currentTargetUserId}
-                variant="outline"
-                size="lg"
-                className="w-full sm:w-auto"
-              >
-                <RefreshCw className={`mr-2 h-5 w-5 ${isRefreshing ? 'animate-spin':''}`} /> 
-                {isRefreshing ? 'Refreshing...':'Refresh Feed'}
-              </Button>
+              {/* Removed main refresh button from here */}
             </div>
             <CardDescription className="mt-2">
               {user?.role === 'admin' 
