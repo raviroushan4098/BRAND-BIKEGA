@@ -15,6 +15,7 @@ import { collection, getDocs, query, where, limit } from 'firebase/firestore';
 
 // Helper to get API key from Firestore
 async function getRapidApiInstagramKey(): Promise<string | null> {
+  console.log("[fetchInstagramReelStatsFlow] Attempting to fetch RapidAPI-Instagram-Scraper API key...");
   try {
     const keysRef = collection(db, 'apiKeys');
     const q = query(keysRef, where('serviceName', '==', 'RapidAPI-Instagram-Scraper'), limit(1));
@@ -60,6 +61,7 @@ export type InstagramReelStatsOutput = z.infer<typeof InstagramReelStatsOutputSc
 
 // Helper function to extract shortcode
 function extractShortcodeFromUrl(url: string): string | null {
+  console.log(`[fetchInstagramReelStatsFlow] Attempting to extract shortcode from URL: ${url}`);
   if (!url) {
     console.warn("[fetchInstagramReelStatsFlow] extractShortcodeFromUrl: Input URL is empty.");
     return null;
@@ -142,14 +144,25 @@ const fetchInstagramReelStatsFlow = ai.defineFlow(
       }
 
       const responseData = await response.json();
-      console.log(`[fetchInstagramReelStatsFlow] Parsed API response data for ${shortcode}:`, JSON.stringify(responseData, null, 2).substring(0,1000) + '...'); // Log a snippet
+      console.log(`[fetchInstagramReelStatsFlow] Parsed API response data for ${shortcode}:`, JSON.stringify(responseData, null, 2).substring(0,1000) + '...');
       
-      const postData = responseData?.data?.[0]; 
-      console.log(`[fetchInstagramReelStatsFlow] Extracted postData for ${shortcode}:`, postData ? JSON.stringify(postData, null, 2).substring(0,1000) + '...' : 'postData is undefined/null');
+      let postDataObject: any = null;
+      if (responseData && responseData.data) {
+        if (Array.isArray(responseData.data) && responseData.data.length > 0) {
+          postDataObject = responseData.data[0];
+           console.log(`[fetchInstagramReelStatsFlow] Extracted postData for ${shortcode} from data array (first element).`);
+        } else if (typeof responseData.data === 'object' && !Array.isArray(responseData.data)) {
+          postDataObject = responseData.data;
+          console.log(`[fetchInstagramReelStatsFlow] Extracted postData for ${shortcode} directly from data object.`);
+        }
+      }
+      
+      const postData = postDataObject;
+      console.log(`[fetchInstagramReelStatsFlow] Final postData for ${shortcode}:`, postData ? JSON.stringify(postData, null, 2).substring(0,1000) + '...' : 'postData is undefined/null');
 
 
       if (!postData) {
-         console.error(`[fetchInstagramReelStatsFlow] Unexpected API response structure for ${shortcode}. Post data not found.`);
+         console.error(`[fetchInstagramReelStatsFlow] Unexpected API response structure for ${shortcode}. Post data not found after attempting to parse.`);
          return {
             shortcode,
             originalUrl: reelUrl,
@@ -174,9 +187,9 @@ const fetchInstagramReelStatsFlow = ai.defineFlow(
       }
       console.log(`[fetchInstagramReelStatsFlow] Extracted postedAt (ISO) for ${shortcode}:`, postedAtISO);
 
-      const commentCount = Number(postData.comment_count) || 0;
-      const likeCount = Number(postData.like_count) || 0;
-      const playCount = Number(postData.play_count) || Number(postData.video_view_count) || 0;
+      const commentCount = Number(postData.comment_count ?? postData.edge_media_to_comment?.count) || 0;
+      const likeCount = Number(postData.like_count ?? postData.edge_media_preview_like?.count) || 0;
+      const playCount = Number(postData.play_count ?? postData.video_view_count) || 0;
       const thumbnailUrl = postData.display_url;
       const username = postData.owner?.username;
 
