@@ -111,7 +111,16 @@ const generalQueryFlow = ai.defineFlow(
         caption: p.caption || "Instagram Post (caption not available)",
     }));
 
-    const {output} = await prompt({...input, instagramData: processedInstagramData});
+    // Construct the input for the prompt explicitly
+    const promptInputPayload: GeneralQueryInput = {
+        userQuery: input.userQuery,
+        userRole: input.userRole,
+        youtubeData: input.youtubeData,
+        instagramData: processedInstagramData,
+    };
+
+    const {output} = await prompt(promptInputPayload);
+    
     if (!output || !output.aiResponse) {
       // Fallback response if the model returns empty or malformed output
       return { aiResponse: "I'm sorry, I couldn't generate a response for that query. Could you please try rephrasing it?" };
