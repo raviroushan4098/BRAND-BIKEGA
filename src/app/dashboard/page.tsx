@@ -4,7 +4,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { Youtube, Instagram, Lightbulb, Users, BarChart3, MessageSquareQuote } from 'lucide-react';
-import Image from 'next/image';
+// Removed Image import as it's no longer used for the dashboard hero
+// import Image from 'next/image'; 
 
 export default function DashboardPage() {
   return (
@@ -21,14 +22,20 @@ export default function DashboardPage() {
             <p className="text-base max-w-2xl mb-6 md:mb-0">
               Navigate through your YouTube and Instagram performance, discover AI-powered suggestions to boost your engagement, and manage user access all in one place. Let's unlock your content's full potential!
             </p>
-            <Image 
-              src="https://placehold.co/300x200.png" 
-              alt="Data analytics illustration"
-              width={300}
-              height={200}
+            <video
+              width="300"
+              height="200"
+              controls
+              muted
+              autoPlay
+              loop
               className="rounded-lg shadow-md object-cover"
-              data-ai-hint="analytics illustration"
-            />
+              src="/dashboard-video.mp4" // Assumes video is in public/dashboard-video.mp4
+            >
+              Sorry, your browser doesn't support embedded videos. You can 
+              <a href="/dashboard-video.mp4">download it</a>
+              and watch it with your favorite video player!
+            </video>
           </CardContent>
         </Card>
 
@@ -112,3 +119,4 @@ const QuickLinkButton = ({ href, icon, label }: QuickLinkButtonProps) => (
     </Link>
   </Button>
 );
+
