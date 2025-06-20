@@ -132,11 +132,17 @@ const DailyPerformanceChart: React.FC<DailyPerformanceChartProps> = ({
               tickLine={false}
               axisLine={false}
               tickFormatter={(value) => {
-                if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
-                if (value >= 1000) return `${(value / 1000).toFixed(0)}K`;
-                return value.toString();
+                if (typeof value !== 'number') return String(value);
+                if (value >= 1000000) {
+                  const num = value / 1000000;
+                  return `${num % 1 === 0 ? num.toFixed(0) : num.toFixed(1)}M`;
+                }
+                if (value >= 1000) {
+                  const num = value / 1000;
+                  return `${num % 1 === 0 ? num.toFixed(0) : num.toFixed(1)}K`;
+                }
+                return value.toLocaleString();
               }}
-              allowDecimals={false}
             />
             <Tooltip content={<CustomTooltip />} cursor={{ fill: 'hsl(var(--accent))', opacity: 0.1 }} />
             <Legend
@@ -153,9 +159,9 @@ const DailyPerformanceChart: React.FC<DailyPerformanceChartProps> = ({
             />
             {metrics.map((metric) => (
               <Line
-                key={metric.key}
+                key={metric.key as string}
                 type="monotone"
-                dataKey={metric.key}
+                dataKey={metric.key as string}
                 name={metric.name}
                 stroke={metric.color}
                 strokeWidth={2}
