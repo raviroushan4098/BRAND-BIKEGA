@@ -19,7 +19,12 @@ import { Label } from '@/components/ui/label';
 import { useAuth } from '@/hooks/useAuth';
 import type { User } from '@/lib/authService';
 import { getAllUsers as apiGetAllUsers } from '@/lib/authService';
-import { assignInstagramLinksToUser, getInstagramLinksForUser, deleteInstagramLinkForUser } from '@/lib/instagramLinkService';
+import { 
+    assignInstagramLinksToUser, 
+    getInstagramLinksForUser, 
+    deleteInstagramLinkForUser,
+    updateInstagramLastRefreshTimestamp
+} from '@/lib/instagramLinkService';
 import { toast } from '@/hooks/use-toast';
 import {
   BarChart3, UserPlus, LinkIcon, FileText, UploadCloud, Users, DownloadCloud, Loader2, Instagram as InstagramUIIcon, Eye, Heart, MessageSquare, ListFilter,
@@ -92,13 +97,36 @@ export default function InstagramAnalyticsPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshProgress, setRefreshProgress] = useState(0);
   const [isGeneratingPptReport, setIsGeneratingPptReport] = useState(false);
+  const [lastRefreshTimestamp, setLastRefreshTimestamp] = useState<string | null>(null);
 
-  // State for View Assigned Links Dialog
   const [isViewLinksDialogOpen, setIsViewLinksDialogOpen] = useState(false);
   const [assignedLinksForDialog, setAssignedLinksForDialog] = useState<string[]>([]);
   const [isLoadingAssignedLinks, setIsLoadingAssignedLinks] = useState(false);
   const [deletingLinkId, setDeletingLinkId] = useState<string | null>(null);
   const [assignedLinkSearchTerm, setAssignedLinkSearchTerm] = useState('');
+
+  const currentTargetUserId = user?.role === 'admin' ? selectedUserIdForAdmin : user?.id;
+
+  useEffect(() => {
+    const fetchInitialTimestamp = async () => {
+      if (currentTargetUserId) {
+        try {
+          const { lastRefreshedAt } = await getInstagramLinksForUser(currentTargetUserId);
+          if (lastRefreshedAt && isValidDate(parseISO(lastRefreshedAt))) {
+            setLastRefreshTimestamp(lastRefreshedAt);
+          } else {
+            setLastRefreshTimestamp(null);
+          }
+        } catch (error) {
+          console.error("Error fetching initial last refresh timestamp for Instagram:", error);
+          setLastRefreshTimestamp(null);
+        }
+      } else {
+        setLastRefreshTimestamp(null);
+      }
+    };
+    fetchInitialTimestamp();
+  }, [currentTargetUserId]);
 
 
   const fetchUsersForAdmin = useCallback(async () => {
@@ -227,8 +255,7 @@ export default function InstagramAnalyticsPage() {
 
 
   const handleRefreshFeed = async () => {
-    const targetUserId = user?.role === 'admin' && selectedUserIdForAdmin ? selectedUserIdForAdmin : user?.id;
-    if (!targetUserId) {
+    if (!currentTargetUserId) {
       toast({ title: "Cannot Refresh", description: "No user context.", variant: "destructive" });
       return;
     }
@@ -239,7 +266,7 @@ export default function InstagramAnalyticsPage() {
     let errorCount = 0;
 
     try {
-      const links = await getInstagramLinksForUser(targetUserId);
+      const { links } = await getInstagramLinksForUser(currentTargetUserId);
       if (links.length === 0) {
         setAllFetchedPosts([]); 
         setPostsToDisplay([]);
@@ -270,12 +297,12 @@ export default function InstagramAnalyticsPage() {
               postedAt: statsOutput.postedAt || new Date(0).toISOString(), 
               lastFetched: new Date().toISOString(),
             };
-            await saveInstagramPostAnalytics(targetUserId, postToStore);
+            await saveInstagramPostAnalytics(currentTargetUserId, postToStore);
             updatedCount++;
           } else {
             console.warn(`Failed to fetch stats for ${reelUrl}: ${statsOutput.errorMessage}`);
             if (statsOutput.shortcode) { 
-                 await saveInstagramPostAnalytics(targetUserId, {
+                 await saveInstagramPostAnalytics(currentTargetUserId, {
                     id: statsOutput.shortcode,
                     reelUrl: reelUrl,
                     likes:0, comments:0, playCount:0, reshareCount:0,
@@ -298,7 +325,13 @@ export default function InstagramAnalyticsPage() {
         }
       }
 
-      await loadInitialUserPosts(targetUserId); 
+      await loadInitialUserPosts(currentTargetUserId);
+      
+      const timestampSuccess = await updateInstagramLastRefreshTimestamp(currentTargetUserId);
+      if (timestampSuccess) {
+        setLastRefreshTimestamp(new Date().toISOString());
+      }
+
       toast({ title: "Feed Refreshed", description: `Updated ${updatedCount} reels. ${errorCount > 0 ? `${errorCount} failed.` : ''}` });
 
     } catch (error: any) {
@@ -389,6 +422,11 @@ export default function InstagramAnalyticsPage() {
       setSingleLink(''); setCsvFile(null);
       const fileInput = document.getElementById('instagram-csv-upload') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
+      
+      const updateTimestampSuccess = await updateInstagramLastRefreshTimestamp(selectedUserIdForAdmin);
+      if (updateTimestampSuccess) {
+          setLastRefreshTimestamp(new Date().toISOString());
+      }
       await handleRefreshFeed(); 
     } else {
       toast({ title: "Assignment Failed", description: "Could not assign Reel links.", variant: "destructive" });
@@ -410,8 +448,6 @@ export default function InstagramAnalyticsPage() {
       <p className="text-xl font-bold text-foreground">{typeof value === 'number' ? value.toLocaleString() : value}</p>
     </div>
   );
-
-  const currentTargetUserId = user?.role === 'admin' ? selectedUserIdForAdmin : user?.id;
 
   const handleDownloadInstagramReportExcel = () => {
     if (postsToDisplay.length === 0) {
@@ -444,7 +480,7 @@ export default function InstagramAnalyticsPage() {
     });
   
     const csvString = csvRows.join('\n');
-    const blob = new Blob([`\uFEFF${csvString}`], { type: 'text/csv;charset=utf-8;' }); // Added BOM for Excel
+    const blob = new Blob([`\uFEFF${csvString}`], { type: 'text/csv;charset=utf-8;' }); 
     const linkEl = document.createElement("a");
     const url = URL.createObjectURL(blob);
     linkEl.setAttribute("href", url);
@@ -497,7 +533,7 @@ export default function InstagramAnalyticsPage() {
       const pptx = new PptxGenJS();
       pptx.layout = "LAYOUT_WIDE";
       const primaryColor = "3F51B5"; 
-      const accentColor = "E91E63"; // Instagram-like Pink/Purple
+      const accentColor = "E91E63"; 
       const textColor = "212121";
       const slideBackgroundColor = "FFFFFF";
 
@@ -591,7 +627,7 @@ export default function InstagramAnalyticsPage() {
     if (!selectedUserIdForAdmin) return;
     setIsLoadingAssignedLinks(true);
     try {
-      const links = await getInstagramLinksForUser(selectedUserIdForAdmin);
+      const { links } = await getInstagramLinksForUser(selectedUserIdForAdmin);
       setAssignedLinksForDialog(links);
     } catch (error) {
       toast({ title: "Error", description: "Could not fetch assigned links.", variant: "destructive" });
@@ -606,9 +642,8 @@ export default function InstagramAnalyticsPage() {
     const success = await deleteInstagramLinkForUser(selectedUserIdForAdmin, linkToDelete);
     if (success) {
       toast({ title: "Link Deleted", description: `Link "${linkToDelete.substring(0, 30)}..." removed.` });
-      await fetchAssignedLinksForDialog(); // Refresh dialog list
+      await fetchAssignedLinksForDialog(); 
 
-      // Remove post from main display if it matches the deleted link
       const shortcodeToDelete = extractShortcodeFromUrlSafe(linkToDelete);
       if (shortcodeToDelete) {
         setAllFetchedPosts(prev => prev.filter(p => p.id !== shortcodeToDelete));
@@ -694,7 +729,7 @@ export default function InstagramAnalyticsPage() {
                   if (open && selectedUserIdForAdmin) {
                     fetchAssignedLinksForDialog();
                   } else if (!open) {
-                    setAssignedLinkSearchTerm(''); // Clear search on close
+                    setAssignedLinkSearchTerm(''); 
                   }
               }}>
                 <DialogTrigger asChild>
@@ -805,23 +840,41 @@ export default function InstagramAnalyticsPage() {
           <Card className="mb-6"><CardHeader><Skeleton className="h-6 w-2/5 mb-2" /><Skeleton className="h-4 w-1/3" /></CardHeader><CardContent className="grid grid-cols-2 md:grid-cols-5 gap-4"><Skeleton className="h-28 w-full" /><Skeleton className="h-28 w-full" /><Skeleton className="h-28 w-full" /><Skeleton className="h-28 w-full" /><Skeleton className="h-28 w-full" /></CardContent></Card>
         )}
 
-        {(!isLoadingPosts || isRefreshing) && summaryStats && (
+        {((!isLoadingPosts && summaryStats) || isRefreshing) && (
           <Card className="mb-6 shadow-md">
             <CardHeader className="flex flex-row items-center justify-between">
                 <div>
                     <CardTitle className="text-xl font-semibold">Performance Overview</CardTitle>
-                    <CardDescription>Summary for {user?.role === 'admin' && selectedUserIdForAdmin ? `${usersForAdminSelect.find(u=>u.id === selectedUserIdForAdmin)?.name || 'selected user'}'s` : "your"} {summaryStats.totalPosts} reel(s) {(dateRange.from||dateRange.to)?"(filtered)":""}.</CardDescription>
+                    {summaryStats && (
+                        <CardDescription>Summary for {user?.role === 'admin' && selectedUserIdForAdmin ? `${usersForAdminSelect.find(u=>u.id === selectedUserIdForAdmin)?.name || 'selected user'}'s` : "your"} {summaryStats.totalPosts} reel(s) {(dateRange.from||dateRange.to)?"(filtered)":""}.</CardDescription>
+                    )}
                 </div>
-                <Button 
-                    onClick={handleRefreshFeed} 
-                    disabled={isRefreshing || isLoadingPosts || !currentTargetUserId || isGeneratingPptReport}
-                    variant="outline"
-                    size="sm"
-                >
-                    <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin':''}`} /> 
-                    {isRefreshing ? 'Refreshing Feed...':'Refresh Feed'}
-                </Button>
+                {currentTargetUserId && (
+                  <div className="flex flex-col items-end">
+                    <Button 
+                        onClick={handleRefreshFeed} 
+                        disabled={isRefreshing || isLoadingPosts || isGeneratingPptReport || !currentTargetUserId}
+                        variant="default"
+                        size="sm"
+                    >
+                        <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin':''}`} /> 
+                        {isRefreshing ? 'Refreshing Feed...':'Refresh Feed'}
+                    </Button>
+                    {lastRefreshTimestamp && (() => {
+                        const dateObj = parseISO(lastRefreshTimestamp);
+                        if (isValidDate(dateObj) && dateObj.getFullYear() > 1970) { 
+                            return (
+                                <p className="text-xs text-muted-foreground mt-1">
+                                    Last refreshed: {format(dateObj, "MMM d, yyyy, h:mm a")}
+                                </p>
+                            );
+                        }
+                        return null; 
+                    })()}
+                  </div>
+                )}
             </CardHeader>
+            {summaryStats && (
             <CardContent className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               <StatCard icon={ListFilter} label="Total Reels" value={summaryStats.totalPosts} />
               <StatCard icon={Heart} label="Total Likes" value={summaryStats.totalLikes} />
@@ -830,6 +883,7 @@ export default function InstagramAnalyticsPage() {
               <StatCard icon={Share2} label="Total Reshares" value={summaryStats.totalReshares} />
               <StatCard icon={Eye} label="Avg Plays" value={summaryStats.averagePlaysPerPost} />
             </CardContent>
+            )}
           </Card>
         )}
         
