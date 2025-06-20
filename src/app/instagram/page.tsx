@@ -4,11 +4,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import AppLayout from '@/components/layout/AppLayout';
 import InstagramCard from '@/components/analytics/InstagramCard';
-import type { StoredInstagramPost } from '@/lib/instagramPostAnalyticsService'; // Updated import
+import type { StoredInstagramPost } from '@/lib/instagramPostAnalyticsService';
 import {
   saveInstagramPostAnalytics,
   getAllInstagramPostAnalyticsForUser,
-  batchSaveInstagramPostAnalytics // Added for potential future use
+  batchSaveInstagramPostAnalytics
 } from '@/lib/instagramPostAnalyticsService';
 import { fetchInstagramReelStats, type FetchInstagramReelStatsInput, type InstagramReelStatsOutput } from '@/ai/flows/fetch-instagram-reel-stats-flow';
 
@@ -36,13 +36,13 @@ interface SummaryStats {
   totalPosts: number;
   totalLikes: number;
   totalComments: number;
-  totalPlays: number; // Changed from views to plays
+  totalPlays: number;
   averageLikesPerPost: number;
   averageCommentsPerPost: number;
-  averagePlaysPerPost: number; // Added
+  averagePlaysPerPost: number;
 }
 
-type SortablePostKey = 'postedAt' | 'likes' | 'comments' | 'playCount'; // Updated for StoredInstagramPost
+type SortablePostKey = 'postedAt' | 'likes' | 'comments' | 'playCount';
 
 export default function InstagramAnalyticsPage() {
   const { user } = useAuth();
@@ -79,7 +79,7 @@ export default function InstagramAnalyticsPage() {
       }
       setIsLoadingUsers(false);
     }
-  }, [user?.id, user?.role]);
+  }, [user?.id, user?.role, toast]);
 
   useEffect(() => {
     fetchUsersForAdmin();
@@ -104,7 +104,7 @@ export default function InstagramAnalyticsPage() {
       toast({ title: "Storage Error", description: "Failed to load cached post data.", variant: "destructive" });
     }
     setIsLoadingPosts(false);
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
     const targetUserId = user?.role === 'admin' && selectedUserIdForAdmin ? selectedUserIdForAdmin : user?.id;
@@ -114,15 +114,14 @@ export default function InstagramAnalyticsPage() {
       setAllFetchedPosts([]);
       setIsLoadingPosts(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, selectedUserIdForAdmin]);
+  }, [user, selectedUserIdForAdmin, loadInitialUserPosts]);
 
 
   useEffect(() => {
     let processedPosts = [...allFetchedPosts];
     if (dateRange.from || dateRange.to) {
       processedPosts = processedPosts.filter(post => {
-        if (!post.postedAt) return false; // Only filter if postedAt exists
+        if (!post.postedAt) return false; 
         const postDate = parseISO(post.postedAt);
         if (!isValidDate(postDate)) return false;
         if (dateRange.from && postDate < dateRange.from) return false;
@@ -208,7 +207,7 @@ export default function InstagramAnalyticsPage() {
 
           if (statsOutput.fetchedSuccessfully && statsOutput.shortcode) {
             const postToStore: StoredInstagramPost = {
-              id: statsOutput.shortcode, // shortcode is the ID
+              id: statsOutput.shortcode, 
               reelUrl: statsOutput.originalUrl,
               likes: statsOutput.likeCount || 0,
               comments: statsOutput.commentCount || 0,
@@ -216,19 +215,19 @@ export default function InstagramAnalyticsPage() {
               caption: statsOutput.caption,
               thumbnailUrl: statsOutput.thumbnailUrl,
               username: statsOutput.username,
-              postedAt: statsOutput.postedAt,
+              postedAt: statsOutput.postedAt || new Date(0).toISOString(), // Ensure postedAt is always a string
               lastFetched: new Date().toISOString(),
             };
             await saveInstagramPostAnalytics(targetUserId, postToStore);
             updatedCount++;
           } else {
             console.warn(`Failed to fetch stats for ${reelUrl}: ${statsOutput.errorMessage}`);
-            // Optionally save an entry with the error message
             if (statsOutput.shortcode) {
                  await saveInstagramPostAnalytics(targetUserId, {
                     id: statsOutput.shortcode,
                     reelUrl: reelUrl,
                     likes:0, comments:0, playCount:0,
+                    postedAt: new Date(0).toISOString(), // Ensure postedAt for error records
                     lastFetched: new Date().toISOString(),
                     errorMessage: statsOutput.errorMessage || "Failed to fetch details."
                  });
@@ -238,18 +237,16 @@ export default function InstagramAnalyticsPage() {
         } catch (flowError: any) {
           console.error(`Error processing link ${reelUrl}:`, flowError);
           errorCount++;
-          // Could also try to save a record with the error here if shortcode extractable before flow error
         }
         
         setRefreshProgress(((i + 1) / links.length) * 100);
         
-        // 2-second delay if not the last link
         if (i < links.length - 1) {
           await new Promise(resolve => setTimeout(resolve, 2000));
         }
       }
 
-      await loadInitialUserPosts(targetUserId); // Reload all posts from Firestore
+      await loadInitialUserPosts(targetUserId); 
       toast({ title: "Feed Refreshed", description: `Updated ${updatedCount} reels. ${errorCount > 0 ? `${errorCount} failed.` : ''}` });
 
     } catch (error: any) {
@@ -340,8 +337,6 @@ export default function InstagramAnalyticsPage() {
       setSingleLink(''); setCsvFile(null);
       const fileInput = document.getElementById('instagram-csv-upload') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
-      // Do not auto-refresh, let admin do it
-      // await loadInitialUserPosts(selectedUserIdForAdmin); 
     } else {
       toast({ title: "Assignment Failed", description: "Could not assign Reel links.", variant: "destructive" });
     }
@@ -480,8 +475,8 @@ export default function InstagramAnalyticsPage() {
               <StatCard icon={ListFilter} label="Total Reels" value={summaryStats.totalPosts} />
               <StatCard icon={Heart} label="Total Likes" value={summaryStats.totalLikes} />
               <StatCard icon={MessageSquare} label="Total Comments" value={summaryStats.totalComments} />
-              <StatCard icon={PlayCircle} label="Total Plays" value={summaryStats.totalPlays} /> {/* Changed icon & label */}
-              <StatCard icon={Eye} label="Avg Plays" value={summaryStats.averagePlaysPerPost} /> {/* Changed label */}
+              <StatCard icon={PlayCircle} label="Total Plays" value={summaryStats.totalPlays} />
+              <StatCard icon={Eye} label="Avg Plays" value={summaryStats.averagePlaysPerPost} />
             </CardContent>
           </Card>
         )}
