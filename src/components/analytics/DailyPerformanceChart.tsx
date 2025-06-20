@@ -132,9 +132,9 @@ const DailyPerformanceChart: React.FC<DailyPerformanceChartProps> = ({
               fontSize={12}
               tickLine={false}
               axisLine={false}
-              domain={[0, 'auto']}
+              domain={[0, (dataMax: number) => Math.max(500, dataMax)]}
               allowDataOverflow={false}
-              tickCount={8} // Suggest number of ticks
+              tickCount={8} 
               tickFormatter={(value) => {
                 if (typeof value !== 'number') return String(value);
                 if (value < 1000) return value.toLocaleString(); 
@@ -180,3 +180,4 @@ const DailyPerformanceChart: React.FC<DailyPerformanceChartProps> = ({
 };
 
 export default DailyPerformanceChart;
+
