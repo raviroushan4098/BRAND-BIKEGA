@@ -9,5 +9,7 @@ import '@/ai/flows/analyze-video-text-flow.ts';
 import '@/ai/flows/generate-channel-analytics-report-flow.ts';
 import '@/ai/flows/fetch-instagram-reel-stats-flow.ts'; 
 import '@/ai/flows/generate-instagram-analytics-report-flow.ts';
-import '@/ai/flows/general-query-flow.ts'; // Added new flow
+import '@/ai/flows/general-query-flow.ts';
+import '@/ai/flows/check-chat-usage-flow.ts';
+import '@/ai/flows/get-chat-usage-status-flow.ts';
 
