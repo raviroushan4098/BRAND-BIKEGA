@@ -36,18 +36,20 @@ export interface StoredInstagramPost {
  */
 export const saveInstagramPostAnalytics = async (userId: string, postData: StoredInstagramPost): Promise<void> => {
   if (!userId || !postData || !postData.id) {
-    console.error("User ID and post data with post ID (shortcode) are required to save analytics.");
+    console.error("[InstagramService] User ID and post data with post ID (shortcode) are required to save analytics.");
     throw new Error("User ID and post data with post ID (shortcode) are required.");
   }
   try {
     const postDocRef = doc(db, 'userInstagramPostAnalytics', userId, 'posts', postData.id);
     const dataToSave: StoredInstagramPost = {
       ...postData,
+      // Ensure lastFetched is always updated on save, even if already present in postData
       lastFetched: new Date().toISOString(), 
     };
     await setDoc(postDocRef, dataToSave, { merge: true });
+    console.log(`[InstagramService] Successfully saved/updated post ${postData.id} for user ${userId} in Firestore. Data:`, JSON.stringify(dataToSave, null, 2).substring(0,500) + "...");
   } catch (error) {
-    console.error(`Error saving Instagram post analytics for post ${postData.id} of user ${userId}:`, error);
+    console.error(`[InstagramService] Error saving Instagram post analytics for post ${postData.id} of user ${userId}:`, error);
     throw error;
   }
 };
@@ -60,34 +62,36 @@ export const saveInstagramPostAnalytics = async (userId: string, postData: Store
  */
 export const getAllInstagramPostAnalyticsForUser = async (userId: string): Promise<StoredInstagramPost[]> => {
   if (!userId) {
-    console.warn("User ID is required to fetch Instagram post analytics.");
+    console.warn("[InstagramService] User ID is required to fetch Instagram post analytics.");
     return [];
   }
+  let posts: StoredInstagramPost[] = [];
   try {
     const postsCollectionRef = collection(db, 'userInstagramPostAnalytics', userId, 'posts');
-    // Prefer ordering by actual post date, fallback to last fetched date
     const q = query(postsCollectionRef, orderBy('postedAt', 'desc'), orderBy('lastFetched', 'desc')); 
     
     const querySnapshot = await getDocs(q);
-    const posts: StoredInstagramPost[] = [];
     querySnapshot.forEach((docSnap) => {
       posts.push({ ...docSnap.data(), id: docSnap.id } as StoredInstagramPost);
     });
+    console.log(`[InstagramService] Fetched ${posts.length} posts for user ${userId} from Firestore (primary query).`);
     return posts;
   } catch (error) {
-    console.error(`Error fetching all Instagram post analytics for user ${userId}:`, error);
-    // Attempt fallback ordering if 'postedAt' composite query fails (e.g. due to missing fields in some docs)
+    console.error(`[InstagramService] Error fetching all Instagram post analytics for user ${userId} (primary query):`, error, "Attempting fallback query...");
+    // Attempt fallback ordering if 'postedAt' composite query fails
     try {
+        posts = []; // Reset posts array for fallback
+        const postsCollectionRef = collection(db, 'userInstagramPostAnalytics', userId, 'posts');
         const fallbackQuery = query(postsCollectionRef, orderBy('lastFetched', 'desc'));
         const fallbackSnapshot = await getDocs(fallbackQuery);
-        const posts: StoredInstagramPost[] = [];
         fallbackSnapshot.forEach((docSnap) => {
           posts.push({ ...docSnap.data(), id: docSnap.id } as StoredInstagramPost);
         });
+        console.log(`[InstagramService] Fetched ${posts.length} posts for user ${userId} from Firestore (fallback query).`);
         return posts;
     } catch (fallbackError) {
-        console.error(`Error fetching all Instagram post analytics for user ${userId} (fallback):`, fallbackError);
-        return [];
+        console.error(`[InstagramService] Error fetching all Instagram post analytics for user ${userId} (fallback query):`, fallbackError);
+        return []; // Return empty on final error
     }
   }
 };
@@ -100,18 +104,21 @@ export const getAllInstagramPostAnalyticsForUser = async (userId: string): Promi
  */
 export const getInstagramPostAnalytics = async (userId: string, postId: string): Promise<StoredInstagramPost | null> => {
   if (!userId || !postId) {
-    console.warn("User ID and Post ID (shortcode) are required.");
+    console.warn("[InstagramService] User ID and Post ID (shortcode) are required.");
     return null;
   }
   try {
     const postDocRef = doc(db, 'userInstagramPostAnalytics', userId, 'posts', postId);
     const docSnap = await getDoc(postDocRef);
     if (docSnap.exists()) {
-      return { ...docSnap.data(), id: docSnap.id } as StoredInstagramPost;
+      const post = { ...docSnap.data(), id: docSnap.id } as StoredInstagramPost;
+      console.log(`[InstagramService] Fetched post ${postId} for user ${userId}:`, JSON.stringify(post,null,2).substring(0,500)+"...");
+      return post;
     }
+    console.log(`[InstagramService] No post found with ID ${postId} for user ${userId}.`);
     return null;
   } catch (error) {
-    console.error(`Error fetching Instagram post analytics for post ${postId} of user ${userId}:`, error);
+    console.error(`[InstagramService] Error fetching Instagram post analytics for post ${postId} of user ${userId}:`, error);
     return null;
   }
 };
@@ -123,7 +130,7 @@ export const getInstagramPostAnalytics = async (userId: string, postId: string):
  */
 export const batchSaveInstagramPostAnalytics = async (userId: string, postsData: StoredInstagramPost[]): Promise<void> => {
   if (!userId || !postsData || postsData.length === 0) {
-    console.error("User ID and posts data are required for batch save.");
+    console.error("[InstagramService] User ID and posts data are required for batch save.");
     return;
   }
   try {
@@ -140,8 +147,9 @@ export const batchSaveInstagramPostAnalytics = async (userId: string, postsData:
       }
     });
     await batch.commit();
+    console.log(`[InstagramService] Batch saved ${postsData.length} posts for user ${userId}.`);
   } catch (error) {
-    console.error(`Error batch saving Instagram post analytics for user ${userId}:`, error);
+    console.error(`[InstagramService] Error batch saving Instagram post analytics for user ${userId}:`, error);
     throw error;
   }
 };
