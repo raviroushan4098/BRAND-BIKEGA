@@ -51,7 +51,7 @@ const StatDisplayCard: React.FC<{ title: string; value: string | number; icon: R
 
 
 export default function OverallAnalyticsPage() {
-  const { user } = useAuth();
+  const { user, isLoading: isAuthLoading } = useAuth(); // Get user and auth loading state
 
   const [youtubeVideos, setYoutubeVideos] = useState<StoredYouTubeVideo[]>([]);
   const [instagramPosts, setInstagramPosts] = useState<StoredInstagramPost[]>([]);
@@ -60,11 +60,11 @@ export default function OverallAnalyticsPage() {
   const [youtubeSummary, setYoutubeSummary] = useState<YouTubeSummaryStats | null>(null);
   const [instagramSummary, setInstagramSummary] = useState<InstagramSummaryStats | null>(null);
 
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true); // Page's own data loading state
   const [error, setError] = useState<string | null>(null);
 
   const fetchData = useCallback(async (userId: string) => {
-    setIsLoading(true);
+    setIsLoading(true); // Set page's loading to true
     setError(null);
     try {
       const [ytData, igData] = await Promise.all([
@@ -78,20 +78,21 @@ export default function OverallAnalyticsPage() {
       setError("Failed to load analytics data. Please try again later.");
       toast({ title: "Error", description: "Could not load analytics data.", variant: "destructive" });
     } finally {
-      setIsLoading(false);
+      setIsLoading(false); // Set page's loading to false
     }
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
     if (user?.id) {
       fetchData(user.id);
-    } else if (!user && !isLoading) {
-        // If no user and not loading (e.g. initial state before auth check completes)
-        // We can set loading to false to avoid an indefinite loading state on direct page access without login
-        setIsLoading(false);
-        setError("Please log in to view analytics.");
+    } else if (!isAuthLoading && !user) {
+      // Auth process is complete, and there is no user.
+      setIsLoading(false); // Set page's loading to false.
+      setError("Please log in to view analytics.");
     }
-  }, [user, fetchData, isLoading]);
+    // If isAuthLoading is true, and no user yet, page's `isLoading` (initially true) remains true,
+    // showing loader until auth resolves.
+  }, [user, isAuthLoading, fetchData]);
 
   useEffect(() => {
     if (youtubeVideos.length > 0 || instagramPosts.length > 0) {
@@ -133,7 +134,7 @@ export default function OverallAnalyticsPage() {
     }
   }, [youtubeVideos, instagramPosts]);
 
-  if (isLoading) {
+  if (isLoading) { // This is the page's isLoading state
     return (
       <AppLayout>
         <div className="flex flex-col items-center justify-center min-h-[calc(100vh-8rem)]">
@@ -144,7 +145,7 @@ export default function OverallAnalyticsPage() {
     );
   }
 
-  if (error) {
+  if (error) { // This is the page's error state
     return (
       <AppLayout>
         <div className="flex flex-col items-center justify-center min-h-[calc(100vh-8rem)] text-center">
@@ -156,17 +157,10 @@ export default function OverallAnalyticsPage() {
     );
   }
   
-  if (!user) {
-     return (
-      <AppLayout>
-        <div className="flex flex-col items-center justify-center min-h-[calc(100vh-8rem)] text-center">
-          <AlertTriangle className="h-16 w-16 text-destructive mb-4" />
-          <p className="text-xl text-destructive font-semibold mb-2">Access Denied</p>
-          <p className="text-md text-muted-foreground">Please log in to view analytics.</p>
-        </div>
-      </AppLayout>
-     );
-  }
+  // If isLoading is false and error is null, but user is still null,
+  // it means auth hasn't finished yet, or some other unexpected state.
+  // However, the useEffect logic should ensure error is set if auth is done and no user.
+  // The initial isLoading=true covers the auth loading phase.
 
   return (
     <AppLayout>
