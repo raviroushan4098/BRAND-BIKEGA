@@ -9,13 +9,15 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Loader2, MessageSquare, Send, UserCircle, Bot, AlertTriangle } from 'lucide-react';
-import { generalQuery, type GeneralQueryInput } from '@/ai/flows/general-query-flow.ts';
-import { mockYouTubeData, mockInstagramData } from '@/lib/mockData'; 
+import { Loader2, MessageSquare, Send, UserCircle, Bot, AlertTriangle, Info } from 'lucide-react';
+import { generalQuery, type GeneralQueryInput, type YouTubeVideoData, type InstagramPostData } from '@/ai/flows/general-query-flow.ts';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/hooks/use-toast';
 import { checkAndIncrementChatUsage, type CheckChatUsageInput } from '@/ai/flows/check-chat-usage-flow';
 import { getChatUsageStatus, type GetChatUsageStatusInput } from '@/ai/flows/get-chat-usage-status-flow';
+
+import { getAllVideoAnalyticsForUser, type StoredYouTubeVideo } from '@/lib/youtubeVideoAnalyticsService';
+import { getAllInstagramPostAnalyticsForUser, type StoredInstagramPost } from '@/lib/instagramPostAnalyticsService';
 
 const formSchema = z.object({
   userQuery: z.string().min(3, "Query must be at least 3 characters long."),
@@ -45,15 +47,14 @@ const ContentSuggestionForm = () => {
   const chatContainerRef = useRef<HTMLDivElement>(null); 
 
   const [messagesRemaining, setMessagesRemaining] = useState<number | null>(null);
-  const [dailyLimit, setDailyLimit] = useState<number>(10); // Default, will be updated from flow
+  const [dailyLimit, setDailyLimit] = useState<number>(10);
   const [chatLimitError, setChatLimitError] = useState<string | null>(null);
 
-  const form = useForm<FormValues>({
-    resolver: zodResolver(formSchema),
-    defaultValues: {
-      userQuery: '',
-    },
-  });
+  const [userYouTubeData, setUserYouTubeData] = useState<StoredYouTubeVideo[]>([]);
+  const [userInstagramData, setUserInstagramData] = useState<StoredInstagramPost[]>([]);
+  const [isContextLoading, setIsContextLoading] = useState(false);
+  const [contextError, setContextError] = useState<string | null>(null);
+
 
   useEffect(() => {
     if (chatContainerRef.current) {
@@ -68,7 +69,7 @@ const ContentSuggestionForm = () => {
           const status = await getChatUsageStatus({ userId: user.id });
           if (status.error) {
             console.warn("Could not fetch initial chat usage:", status.error);
-            setMessagesRemaining(10); // Fallback to full limit on error
+            setMessagesRemaining(10); 
             setDailyLimit(10);
           } else {
             setMessagesRemaining(status.messagesRemaining);
@@ -91,6 +92,35 @@ const ContentSuggestionForm = () => {
       }
     };
     fetchInitialUsage();
+  }, [user]);
+
+  useEffect(() => {
+    const fetchContextData = async () => {
+      if (user?.id) {
+        setIsContextLoading(true);
+        setContextError(null);
+        try {
+          const [ytData, igData] = await Promise.all([
+            getAllVideoAnalyticsForUser(user.id),
+            getAllInstagramPostAnalyticsForUser(user.id)
+          ]);
+          setUserYouTubeData(ytData);
+          setUserInstagramData(igData);
+        } catch (err) {
+          console.error("Error fetching context data for AI chat:", err);
+          setContextError("Could not load your latest analytics data for AI context. Using general knowledge.");
+          setUserYouTubeData([]);
+          setUserInstagramData([]);
+        } finally {
+          setIsContextLoading(false);
+        }
+      } else {
+        setUserYouTubeData([]);
+        setUserInstagramData([]);
+        setIsContextLoading(false);
+      }
+    };
+    fetchContextData();
   }, [user]);
 
 
@@ -119,7 +149,6 @@ const ContentSuggestionForm = () => {
           return;
       }
 
-      // Add user message to chat history regardless of limit for user's reference
       const userMessage: ChatMessage = {
         id: `user-${Date.now()}`,
         type: 'user',
@@ -135,7 +164,7 @@ const ContentSuggestionForm = () => {
         toast({
           title: "Daily Limit Reached",
           description: `You have used all your ${usageResult.dailyLimit} messages for today.`,
-          variant: "default", // Changed to default as it's not a destructive error, but an info
+          variant: "default",
         });
         setIsLoading(false);
         return;
@@ -147,26 +176,25 @@ const ContentSuggestionForm = () => {
       return;
     }
 
-    // If allowed, proceed to call AI
-    const youtubeDataContext = mockYouTubeData.map(v => ({ 
-        title: v.title, 
-        likes: v.likes, 
-        comments: v.comments, 
-        views: v.views 
+    const youtubeContextForAI: YouTubeVideoData[] = userYouTubeData.map(v => ({ 
+        title: v.title || 'Untitled Video', 
+        likes: v.likes || 0, 
+        comments: v.comments || 0, 
+        views: v.views || 0 
     }));
-    const instagramDataContext = mockInstagramData.map(p => ({ 
-        thumbnail: p.thumbnailUrl, 
-        likes: p.likes, 
-        comments: p.comments, 
-        timestamp: p.timestamp,
-        caption: p.caption 
+    const instagramContextForAI: InstagramPostData[] = userInstagramData.map(p => ({ 
+        thumbnail: p.thumbnailUrl || '', // Flow expects thumbnail, though caption is more useful
+        likes: p.likes || 0, 
+        comments: p.comments || 0, 
+        timestamp: p.postedAt || new Date(0).toISOString(),
+        caption: p.caption || 'Instagram Post (no caption)' 
     }));
 
     const aiInput: GeneralQueryInput = {
       userQuery: data.userQuery,
       userRole: user?.role || 'user',
-      youtubeData: youtubeDataContext,
-      instagramData: instagramDataContext,
+      youtubeData: youtubeContextForAI,
+      instagramData: instagramContextForAI,
     };
 
     try {
@@ -210,9 +238,19 @@ const ContentSuggestionForm = () => {
             )}
         </div>
         <CardDescription>
-          Have questions about your social media strategy, content ideas, or performance? Ask our AI assistant!
-          Context from mock YouTube & Instagram data is provided to the AI. Daily limit: {dailyLimit} messages.
+          Have questions about your social media strategy or content? Ask our AI assistant! 
+          {isContextLoading && " Loading your analytics data for context..."}
+          {!isContextLoading && contextError && " Could not load analytics data; using general knowledge."}
+          {!isContextLoading && !contextError && (userYouTubeData.length > 0 || userInstagramData.length > 0) && " Your recent YouTube & Instagram data is provided as context."}
+          {!isContextLoading && !contextError && userYouTubeData.length === 0 && userInstagramData.length === 0 && " No specific analytics data found to provide as context."}
         </CardDescription>
+         {contextError && !isContextLoading && (
+            <Alert variant="default" className="mt-2 bg-blue-50 border-blue-200 text-blue-700">
+                <Info className="h-4 w-4 text-blue-600" />
+                <AlertTitle>Context Data Note</AlertTitle>
+                <AlertDescription>{contextError}</AlertDescription>
+            </Alert>
+        )}
       </CardHeader>
       
       <CardContent className="flex-grow overflow-y-auto p-6" ref={chatContainerRef}> 
@@ -262,9 +300,9 @@ const ContentSuggestionForm = () => {
                 }
               }
             }}
-            disabled={isLoading || !!chatLimitError}
+            disabled={isLoading || !!chatLimitError || isContextLoading}
           />
-          <Button type="submit" disabled={isLoading || !form.formState.isValid || !!chatLimitError} size="icon" className="h-auto p-3 shrink-0">
+          <Button type="submit" disabled={isLoading || !form.formState.isValid || !!chatLimitError || isContextLoading} size="icon" className="h-auto p-3 shrink-0">
             {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
             <span className="sr-only">Send</span>
           </Button>
@@ -292,4 +330,3 @@ const ContentSuggestionForm = () => {
 };
 
 export default ContentSuggestionForm;
-

@@ -11,24 +11,29 @@
  */
 
 import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+import {z}from 'genkit';
 
 // Schema for individual YouTube video data (consistent with other flows)
-const YouTubeVideoDataSchema = z.object({
+// This type is exported for use in ContentSuggestionForm
+export const YouTubeVideoDataSchema = z.object({
   title: z.string(),
   likes: z.number(),
   comments: z.number(),
   views: z.number(),
 });
+export type YouTubeVideoData = z.infer<typeof YouTubeVideoDataSchema>;
+
 
 // Schema for individual Instagram post data (consistent with other flows)
-const InstagramPostDataSchema = z.object({
-  thumbnail: z.string().describe("URL or placeholder for the thumbnail image."), // Retaining 'thumbnail' as per original flow for consistency, though caption might be more useful for text analysis.
+// This type is exported for use in ContentSuggestionForm
+export const InstagramPostDataSchema = z.object({
+  thumbnail: z.string().describe("URL or placeholder for the thumbnail image."),
   likes: z.number(),
   comments: z.number(),
   timestamp: z.string().describe("ISO date string of when the post was made."),
-  caption: z.string().optional().describe("The caption of the Instagram post."), // Added caption
+  caption: z.string().optional().describe("The caption of the Instagram post."),
 });
+export type InstagramPostData = z.infer<typeof InstagramPostDataSchema>;
 
 
 const GeneralQueryInputSchema = z.object({
@@ -114,13 +119,3 @@ const generalQueryFlow = ai.defineFlow(
     return output;
   }
 );
-
-// Remove the old suggestContentImprovements flow to avoid conflicts if it's not being used elsewhere.
-// If it IS used elsewhere, this line should be removed.
-// For this specific request, we are replacing its functionality on the suggestions page.
-// --- No, let's keep it for now, just in case it was scaffolded for other reasons or future use.
-// --- The UI will stop calling it from the suggestions page.
-// import './suggest-content-improvements';
-// export * from './suggest-content-improvements';
-// This also means we might need to update src/ai/dev.ts if suggest-content-improvements.ts is no longer the primary export/focus for suggestions.
-// For now, we just add the new flow.
