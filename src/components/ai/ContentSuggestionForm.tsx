@@ -9,140 +9,173 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Loader2, Wand2, Youtube, Instagram as InstagramIcon } from 'lucide-react';
-import { suggestContentImprovements, type SuggestContentImprovementsInput, type SuggestContentImprovementsOutput } from '@/ai/flows/suggest-content-improvements';
-import { mockYouTubeData, mockInstagramData } from '@/lib/mockData'; // For pre-filling
+import { Loader2, Wand2, MessageSquare, Send, UserCircle, Bot } from 'lucide-react';
+import { generalQuery, type GeneralQueryInput, type GeneralQueryOutput } from '@/ai/flows/general-query-flow';
+import { mockYouTubeData, mockInstagramData, type YouTubeVideo, type InstagramPost } from '@/lib/mockData'; // For providing context data
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/hooks/use-toast';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
-// Simplified input for the form - in a real app, this would be richer
 const formSchema = z.object({
-  userRole: z.string().min(1, "User role is required."),
-  // For demo, we'll use mock data directly rather than text areas for complex data
+  userQuery: z.string().min(3, "Query must be at least 3 characters long."),
 });
 
 type FormValues = z.infer<typeof formSchema>;
 
+interface ChatMessage {
+  id: string;
+  type: 'user' | 'ai';
+  content: string;
+  timestamp: Date;
+}
+
 const ContentSuggestionForm = () => {
   const { user } = useAuth();
-  const [suggestions, setSuggestions] = useState<SuggestContentImprovementsOutput | null>(null);
+  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      userRole: user?.role || 'user',
+      userQuery: '',
     },
   });
 
   const onSubmit: SubmitHandler<FormValues> = async (data) => {
     setIsLoading(true);
     setError(null);
-    setSuggestions(null);
 
-    // Prepare data for the AI flow using mock data
-    const aiInput: SuggestContentImprovementsInput = {
-      youtubeData: mockYouTubeData.map(v => ({ 
+    const userMessage: ChatMessage = {
+      id: `user-${Date.now()}`,
+      type: 'user',
+      content: data.userQuery,
+      timestamp: new Date(),
+    };
+    setChatHistory(prev => [...prev, userMessage]);
+    form.reset(); // Clear the input field
+
+    // Prepare data for the AI flow
+    // Map mock data to the expected schema for the new flow
+    const youtubeDataContext = mockYouTubeData.map(v => ({ 
         title: v.title, 
         likes: v.likes, 
         comments: v.comments, 
-        views: v.views  // Changed from shares to views
-      })),
-      instagramData: mockInstagramData.map(p => ({ 
+        views: v.views 
+    }));
+    const instagramDataContext = mockInstagramData.map(p => ({ 
         thumbnail: p.thumbnailUrl, 
         likes: p.likes, 
         comments: p.comments, 
-        timestamp: p.timestamp 
-      })),
-      userRole: data.userRole,
+        timestamp: p.timestamp,
+        caption: p.caption 
+    }));
+
+    const aiInput: GeneralQueryInput = {
+      userQuery: data.userQuery,
+      userRole: user?.role || 'user',
+      youtubeData: youtubeDataContext,
+      instagramData: instagramDataContext,
     };
 
     try {
-      const result = await suggestContentImprovements(aiInput);
-      setSuggestions(result);
-      toast({ title: "Suggestions Generated!", description: "AI has provided content improvement ideas." });
+      const result = await generalQuery(aiInput);
+      const aiMessage: ChatMessage = {
+        id: `ai-${Date.now()}`,
+        type: 'ai',
+        content: result.aiResponse,
+        timestamp: new Date(),
+      };
+      setChatHistory(prev => [...prev, aiMessage]);
+      // toast({ title: "AI Responded!", description: "InsightStreamBot has answered your query." });
     } catch (err) {
-      console.error("Error getting AI suggestions:", err);
-      setError("Failed to generate suggestions. Please try again.");
-      toast({ title: "Error", description: "Failed to generate suggestions.", variant: "destructive" });
+      console.error("Error getting AI response:", err);
+      const errorMessage = err instanceof Error ? err.message : "Failed to get response from AI. Please try again.";
+      setError(errorMessage);
+      const aiErrorMessage: ChatMessage = {
+        id: `ai-error-${Date.now()}`,
+        type: 'ai',
+        content: `Sorry, I encountered an error: ${errorMessage}`,
+        timestamp: new Date(),
+      }
+      setChatHistory(prev => [...prev, aiErrorMessage]);
+      toast({ title: "Error", description: errorMessage, variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
   };
-
-  const canActivateTool = true; 
-
-  if (!canActivateTool) {
-    return (
-      <Alert>
-        <Wand2 className="h-4 w-4" />
-        <AlertTitle>AI Suggestions Coming Soon!</AlertTitle>
-        <AlertDescription>
-          This tool will be activated after a substantial analytics collection period to provide you with the most accurate and personalized recommendations.
-        </AlertDescription>
-      </Alert>
-    );
-  }
-
+  
   return (
-    <Card className="w-full shadow-xl">
+    <Card className="w-full shadow-xl flex flex-col max-h-[80vh]">
       <CardHeader>
         <div className="flex items-center gap-3">
-          <Wand2 className="h-8 w-8 text-primary" />
-          <CardTitle className="text-3xl font-bold">AI Content Optimizer</CardTitle>
+          <MessageSquare className="h-8 w-8 text-primary" />
+          <CardTitle className="text-3xl font-bold">Ask InsightStream AI</CardTitle>
         </div>
         <CardDescription>
-          Get personalized suggestions to improve your social media content, engagement, and reach.
-          This demo uses pre-loaded mock data for YouTube and Instagram.
+          Have questions about your social media strategy, content ideas, or performance? Ask our AI assistant!
+          Context from mock YouTube & Instagram data is provided to the AI.
         </CardDescription>
       </CardHeader>
-      <form onSubmit={form.handleSubmit(onSubmit)}>
-        <CardContent className="space-y-6">
-           {error && (
-            <Alert variant="destructive">
-              <AlertTitle>Error</AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-        </CardContent>
-        <CardFooter className="flex justify-end">
-          <Button type="submit" disabled={isLoading} size="lg">
-            {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                Generating...
-              </>
-            ) : (
-              <>
-                <Wand2 className="mr-2 h-5 w-5" />
-                Generate Suggestions
-              </>
-            )}
-          </Button>
-        </CardFooter>
-      </form>
-
-      {suggestions && suggestions.suggestions.length > 0 && (
-        <div className="p-6 border-t">
-          <h3 className="text-2xl font-semibold mb-4">Here are your suggestions:</h3>
-          <div className="space-y-6">
-            {suggestions.suggestions.map((suggestion, index) => (
-              <Card key={index} className="bg-background/50">
-                <CardHeader className="flex flex-row items-center gap-3 pb-2">
-                  {suggestion.platform === 'youtube' 
-                    ? <Youtube className="h-6 w-6 text-red-600" /> 
-                    : <InstagramIcon className="h-6 w-6 text-pink-600" />}
-                  <CardTitle className="text-xl capitalize">{suggestion.platform} - {suggestion.type}</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-muted-foreground">{suggestion.description}</p>
-                </CardContent>
-              </Card>
+      
+      <CardContent className="flex-grow overflow-hidden flex flex-col p-0">
+        <ScrollArea className="flex-grow p-6">
+          <div className="space-y-4">
+            {chatHistory.map((msg) => (
+              <div key={msg.id} className={`flex items-end space-x-2 ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}>
+                {msg.type === 'ai' && <Bot className="h-6 w-6 text-primary flex-shrink-0 mb-1" />}
+                <div className={`max-w-[70%] p-3 rounded-lg ${msg.type === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
+                  <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                  <p className="text-xs opacity-70 mt-1 text-right">
+                    {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                </div>
+                {msg.type === 'user' && <UserCircle className="h-6 w-6 text-muted-foreground flex-shrink-0 mb-1" />}
+              </div>
             ))}
+            {isLoading && chatHistory[chatHistory.length-1]?.type === 'user' && (
+              <div className="flex items-end space-x-2 justify-start">
+                <Bot className="h-6 w-6 text-primary flex-shrink-0 mb-1" />
+                <div className="max-w-[70%] p-3 rounded-lg bg-muted text-muted-foreground">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                </div>
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        </ScrollArea>
+      </CardContent>
+
+      <CardFooter className="border-t p-4">
+        <form onSubmit={form.handleSubmit(onSubmit)} className="flex w-full items-start gap-2">
+          <Textarea
+            {...form.register('userQuery')}
+            placeholder="Type your question or request here... (e.g., 'Suggest 3 video ideas for my gaming channel')"
+            className="flex-grow resize-none min-h-[40px]"
+            rows={1}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (form.formState.isValid && !isLoading) {
+                  form.handleSubmit(onSubmit)();
+                }
+              }
+            }}
+            disabled={isLoading}
+          />
+          <Button type="submit" disabled={isLoading || !form.formState.isValid} size="icon" className="h-auto p-3 shrink-0">
+            {isLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+            <span className="sr-only">Send</span>
+          </Button>
+        </form>
+        {form.formState.errors.userQuery && (
+          <p className="text-xs text-destructive mt-1 w-full">{form.formState.errors.userQuery.message}</p>
+        )}
+        {error && !isLoading && (
+          <Alert variant="destructive" className="mt-2 w-full">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+      </CardFooter>
     </Card>
   );
 };
