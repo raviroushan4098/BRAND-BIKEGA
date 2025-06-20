@@ -165,8 +165,8 @@ const Sidebar = React.forwardRef<HTMLDivElement, SidebarExtendedProps>(
       collapsible = "offcanvas",
       className,
       children,
-      Rail, 
-      ...rest 
+      Rail,
+      ...rest
     },
     ref
   ) => {
@@ -180,7 +180,7 @@ const Sidebar = React.forwardRef<HTMLDivElement, SidebarExtendedProps>(
             className
           )}
           ref={ref}
-          {...rest} 
+          {...rest}
         >
           {children}
         </div>
@@ -189,7 +189,7 @@ const Sidebar = React.forwardRef<HTMLDivElement, SidebarExtendedProps>(
 
     if (isMobile) {
       return (
-        <Sheet open={openMobile} onOpenChange={setOpenMobile} {...rest}> 
+        <Sheet open={openMobile} onOpenChange={setOpenMobile} {...rest}>
           <SheetContent
             data-sidebar="sidebar"
             data-mobile="true"
@@ -204,7 +204,7 @@ const Sidebar = React.forwardRef<HTMLDivElement, SidebarExtendedProps>(
             <SheetTitle className="sr-only">Main Menu</SheetTitle>
             <div className="flex h-full w-full flex-col">
               {children}
-              {Rail} 
+              {Rail}
             </div>
           </SheetContent>
         </Sheet>
@@ -241,7 +241,7 @@ const Sidebar = React.forwardRef<HTMLDivElement, SidebarExtendedProps>(
               : "group-data-[collapsible=icon]:w-[--sidebar-width-icon] group-data-[side=left]:border-r group-data-[side=right]:border-l",
             className
           )}
-          {...rest} 
+          {...rest}
         >
           <div
             data-sidebar="sidebar"
@@ -249,7 +249,7 @@ const Sidebar = React.forwardRef<HTMLDivElement, SidebarExtendedProps>(
           >
             {children}
           </div>
-          {Rail} 
+          {Rail}
         </div>
       </div>
     )
@@ -320,7 +320,7 @@ const SidebarInset = React.forwardRef<
     <main
       ref={ref}
       className={cn(
-        "relative flex min-h-svh flex-1 flex-col bg-background",
+        "relative flex min-h-svh flex-1 flex-col bg-gradient-to-br from-background to-primary/10",
         "peer-data-[variant=inset]:min-h-[calc(100svh-theme(spacing.4))] md:peer-data-[variant=inset]:m-2 md:peer-data-[state=collapsed]:peer-data-[variant=inset]:ml-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow",
         className
       )}
