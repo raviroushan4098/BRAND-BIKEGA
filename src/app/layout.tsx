@@ -6,6 +6,11 @@ import { AuthProvider } from '@/hooks/useAuth'; // AuthProvider for global state
 export const metadata: Metadata = {
   title: 'Brand Dikhega',
   description: 'AI-Powered Social Media Analytics & Suggestions',
+  icons: {
+    icon: '/favicon.png', // Assumes favicon.png is in the public folder. Change if your file is different.
+    // You can also add other icon types here, for example:
+    // apple: '/apple-icon.png',
+  },
 };
 
 export default function RootLayout({
