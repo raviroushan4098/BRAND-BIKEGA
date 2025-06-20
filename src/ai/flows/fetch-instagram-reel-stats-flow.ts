@@ -157,52 +157,37 @@ const fetchInstagramReelStatsFlow = ai.defineFlow(
       const responseData = await response.json();
       console.log(`[fetchInstagramReelStatsFlow] Parsed API response data for ${shortcode}:`, JSON.stringify(responseData, null, 2).substring(0,1000) + '...');
       
-      let postDataObject: any = null;
-      if (responseData && responseData.data) {
-        if (Array.isArray(responseData.data) && responseData.data.length > 0) {
-          postDataObject = responseData.data[0];
-           console.log(`[fetchInstagramReelStatsFlow] Extracted postData for ${shortcode} from data array (first element).`);
-        } else if (typeof responseData.data === 'object' && !Array.isArray(responseData.data)) {
-          postDataObject = responseData.data;
-          console.log(`[fetchInstagramReelStatsFlow] Extracted postData for ${shortcode} directly from data object.`);
-        }
-      }
-      
-      const postData = postDataObject;
-      console.log(`[fetchInstagramReelStatsFlow] Final postData for ${shortcode}:`, postData ? JSON.stringify(postData, null, 2).substring(0,1000) + '...' : 'postData is undefined/null');
+      // Directly use responseData as postData based on new sample
+      const postData = responseData; 
 
-
-      if (!postData) {
-         console.error(`[fetchInstagramReelStatsFlow] Unexpected API response structure for ${shortcode}. Post data not found after attempting to parse.`);
+      if (!postData) { // Should not happen if response.ok and response.json() succeeded
+         console.error(`[fetchInstagramReelStatsFlow] API response parsed but was unexpectedly empty for ${shortcode}.`);
          return {
             shortcode,
             originalUrl: reelUrl,
             fetchedSuccessfully: false,
-            errorMessage: 'Unexpected API response structure. Post data not found.',
+            errorMessage: 'API response parsed but was unexpectedly empty.',
          };
       }
       
-      let captionText: string | undefined = undefined;
-      if (postData.edge_media_to_caption?.edges?.length > 0 && postData.edge_media_to_caption.edges[0].node?.text) {
-        captionText = postData.edge_media_to_caption.edges[0].node.text;
-      }
+      const captionText = postData.caption?.text;
       console.log(`[fetchInstagramReelStatsFlow] Extracted caption for ${shortcode}:`, captionText ? captionText.substring(0,50) + "..." : "undefined");
 
       let postedAtISO: string | undefined = undefined;
-      if (postData.taken_at_timestamp) {
+      if (postData.taken_at) { // Unix timestamp in seconds
         try {
-          postedAtISO = new Date(postData.taken_at_timestamp * 1000).toISOString();
+          postedAtISO = new Date(postData.taken_at * 1000).toISOString();
         } catch (e) {
-          console.warn(`[fetchInstagramReelStatsFlow] Could not parse timestamp for ${shortcode}: ${postData.taken_at_timestamp}`);
+          console.warn(`[fetchInstagramReelStatsFlow] Could not parse timestamp for ${shortcode}: ${postData.taken_at}`);
         }
       }
       console.log(`[fetchInstagramReelStatsFlow] Extracted postedAt (ISO) for ${shortcode}:`, postedAtISO);
 
-      const commentCount = Number(postData.comment_count ?? postData.edge_media_to_comment?.count ?? postData.comments_count) || 0;
-      const likeCount = Number(postData.like_count ?? postData.edge_media_preview_like?.count ?? postData.likes_count) || 0;
-      const playCount = Number(postData.play_count ?? postData.video_view_count ?? postData.reels_plays_count) || 0;
-      const thumbnailUrl = postData.display_url ?? postData.thumbnail_url;
-      const username = postData.owner?.username;
+      const commentCount = Number(postData.comment_count) || 0;
+      const likeCount = Number(postData.like_count) || 0;
+      const playCount = Number(postData.play_count) || 0;
+      const thumbnailUrl = postData.image_versions2?.candidates?.[0]?.url; // Taking the first candidate
+      const username = postData.user?.username;
 
       console.log(`[fetchInstagramReelStatsFlow] Final extracted stats for ${shortcode}:
         - Comment Count: ${commentCount}
