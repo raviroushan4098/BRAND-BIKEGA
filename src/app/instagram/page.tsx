@@ -424,7 +424,7 @@ export default function InstagramAnalyticsPage() {
       return `"${stringVal.replace(/"/g, '""')}"`;
     };
   
-    const headers = ["Publish Date", "Title", "Like Count", "Comment Count", "Play Count", "Share Count", "Link"];
+    const headers = ["Publish Date", "Title", "Play Count", "Like Count", "Comment Count", "Share Count", "Link"];
     const csvRows = [headers.join(',')];
   
     postsToDisplay.forEach(post => {
@@ -434,9 +434,9 @@ export default function InstagramAnalyticsPage() {
       const row = [
         escapeCsvCell(postedDate),
         escapeCsvCell(title),
+        post.playCount || 0,
         post.likes || 0,
         post.comments || 0,
-        post.playCount || 0,
         post.reshareCount || 0,
         escapeCsvCell(post.reelUrl),
       ];
@@ -497,7 +497,7 @@ export default function InstagramAnalyticsPage() {
       const pptx = new PptxGenJS();
       pptx.layout = "LAYOUT_WIDE";
       const primaryColor = "3F51B5"; 
-      const accentColor = "E91E63"; 
+      const accentColor = "E91E63"; // Instagram-like Pink/Purple
       const textColor = "212121";
       const slideBackgroundColor = "FFFFFF";
 
@@ -801,26 +801,6 @@ export default function InstagramAnalyticsPage() {
           <CardFooter><Button variant="outline" onClick={handleClearFilters} disabled={isRefreshing}><FilterX className="mr-2 h-4 w-4" /> Clear</Button></CardFooter>
         </Card>
 
-        {(!isLoadingPosts && currentTargetUserId) && (
-             <Card className="mb-6 shadow-md">
-                <CardHeader>
-                    <CardTitle className="text-xl font-semibold">Actions</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <Button 
-                        onClick={handleRefreshFeed} 
-                        disabled={isRefreshing || isLoadingPosts || !currentTargetUserId || isGeneratingPptReport}
-                        variant="outline"
-                        size="sm"
-                        className="w-full sm:w-auto"
-                    >
-                        <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin':''}`} /> 
-                        {isRefreshing ? 'Refreshing Feed...':'Refresh Feed'}
-                    </Button>
-                </CardContent>
-            </Card>
-        )}
-
         {(isLoadingPosts && !summaryStats && !isRefreshing) && (
           <Card className="mb-6"><CardHeader><Skeleton className="h-6 w-2/5 mb-2" /><Skeleton className="h-4 w-1/3" /></CardHeader><CardContent className="grid grid-cols-2 md:grid-cols-5 gap-4"><Skeleton className="h-28 w-full" /><Skeleton className="h-28 w-full" /><Skeleton className="h-28 w-full" /><Skeleton className="h-28 w-full" /><Skeleton className="h-28 w-full" /></CardContent></Card>
         )}
@@ -832,6 +812,15 @@ export default function InstagramAnalyticsPage() {
                     <CardTitle className="text-xl font-semibold">Performance Overview</CardTitle>
                     <CardDescription>Summary for {user?.role === 'admin' && selectedUserIdForAdmin ? `${usersForAdminSelect.find(u=>u.id === selectedUserIdForAdmin)?.name || 'selected user'}'s` : "your"} {summaryStats.totalPosts} reel(s) {(dateRange.from||dateRange.to)?"(filtered)":""}.</CardDescription>
                 </div>
+                <Button 
+                    onClick={handleRefreshFeed} 
+                    disabled={isRefreshing || isLoadingPosts || !currentTargetUserId || isGeneratingPptReport}
+                    variant="outline"
+                    size="sm"
+                >
+                    <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin':''}`} /> 
+                    {isRefreshing ? 'Refreshing Feed...':'Refresh Feed'}
+                </Button>
             </CardHeader>
             <CardContent className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               <StatCard icon={ListFilter} label="Total Reels" value={summaryStats.totalPosts} />
