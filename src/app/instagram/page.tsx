@@ -226,7 +226,7 @@ export default function InstagramAnalyticsPage() {
             updatedCount++;
           } else {
             console.warn(`Failed to fetch stats for ${reelUrl}: ${statsOutput.errorMessage}`);
-            if (statsOutput.shortcode) { // Save error state if shortcode was extractable
+            if (statsOutput.shortcode) { 
                  await saveInstagramPostAnalytics(targetUserId, {
                     id: statsOutput.shortcode,
                     reelUrl: reelUrl,
@@ -245,7 +245,6 @@ export default function InstagramAnalyticsPage() {
         
         setRefreshProgress(((i + 1) / links.length) * 100);
         
-        // Implement a 2-second delay between API calls
         if (i < links.length - 1) {
           await new Promise(resolve => setTimeout(resolve, 2000));
         }
@@ -342,7 +341,7 @@ export default function InstagramAnalyticsPage() {
       setSingleLink(''); setCsvFile(null);
       const fileInput = document.getElementById('instagram-csv-upload') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
-      await handleRefreshFeed(); // Automatically trigger feed refresh
+      await handleRefreshFeed(); 
     } else {
       toast({ title: "Assignment Failed", description: "Could not assign Reel links.", variant: "destructive" });
     }
@@ -364,16 +363,30 @@ export default function InstagramAnalyticsPage() {
     </div>
   );
 
+  const currentTargetUserId = user?.role === 'admin' ? selectedUserIdForAdmin : user?.id;
+
   return (
     <AppLayout>
       <div className="container mx-auto py-8 px-4 md:px-6">
         <Card className="mb-8 shadow-lg">
           <CardHeader>
-            <div className="flex items-center gap-3">
-              <InstagramUIIcon className="h-8 w-8 text-primary" />
-              <CardTitle className="text-3xl font-bold">Instagram Reel Analytics</CardTitle>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <InstagramUIIcon className="h-8 w-8 text-primary" />
+                <CardTitle className="text-3xl font-bold">Instagram Reel Analytics</CardTitle>
+              </div>
+              <Button 
+                onClick={handleRefreshFeed} 
+                disabled={isRefreshing || isLoadingPosts || !currentTargetUserId}
+                variant="outline"
+                size="lg"
+                className="w-full sm:w-auto"
+              >
+                <RefreshCw className={`mr-2 h-5 w-5 ${isRefreshing ? 'animate-spin':''}`} /> 
+                {isRefreshing ? 'Refreshing...':'Refresh Feed'}
+              </Button>
             </div>
-            <CardDescription>
+            <CardDescription className="mt-2">
               {user?.role === 'admin' 
                 ? "Assign Instagram Reel links, view tracked posts, and manage data." 
                 : "Overview of Instagram Reel performance. Refresh to get latest data."
@@ -467,15 +480,8 @@ export default function InstagramAnalyticsPage() {
         {(!isLoadingPosts || isRefreshing) && summaryStats && (
           <Card className="mb-6 shadow-md">
             <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-xl font-semibold">Performance Overview</CardTitle>
-                  <CardDescription>Summary for {user?.role === 'admin' && selectedUserIdForAdmin ? `${usersForAdminSelect.find(u=>u.id === selectedUserIdForAdmin)?.name || 'selected user'}'s` : "your"} {summaryStats.totalPosts} reel(s) {(dateRange.from||dateRange.to)?"(filtered)":""}.</CardDescription>
-                </div>
-                <Button onClick={handleRefreshFeed} disabled={isRefreshing || isLoadingPosts} variant="outline" size="sm">
-                  <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin':''}`} /> {isRefreshing ? 'Refreshing...':'Refresh Feed'}
-                </Button>
-              </div>
+                <CardTitle className="text-xl font-semibold">Performance Overview</CardTitle>
+                <CardDescription>Summary for {user?.role === 'admin' && selectedUserIdForAdmin ? `${usersForAdminSelect.find(u=>u.id === selectedUserIdForAdmin)?.name || 'selected user'}'s` : "your"} {summaryStats.totalPosts} reel(s) {(dateRange.from||dateRange.to)?"(filtered)":""}.</CardDescription>
             </CardHeader>
             <CardContent className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
               <StatCard icon={ListFilter} label="Total Reels" value={summaryStats.totalPosts} />
