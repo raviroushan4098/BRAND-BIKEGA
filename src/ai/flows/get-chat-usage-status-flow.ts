@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview A Genkit flow to get the current chat usage status for a user without incrementing.
@@ -12,12 +13,12 @@ import { doc, getDoc, Timestamp } from 'firebase/firestore';
 
 const MAX_CHAT_LIMIT_STATUS = 10; // Needs to be consistent with check-chat-usage-flow.ts
 
-export const GetChatUsageStatusInputSchema = z.object({
+const GetChatUsageStatusInputSchema = z.object({
   userId: z.string().min(1, "User ID is required."),
 });
 export type GetChatUsageStatusInput = z.infer<typeof GetChatUsageStatusInputSchema>;
 
-export const GetChatUsageStatusOutputSchema = z.object({
+const GetChatUsageStatusOutputSchema = z.object({
   messagesRemaining: z.number().int().min(0),
   dailyLimit: z.number().int(),
   error: z.string().optional(),
@@ -67,3 +68,4 @@ const getChatUsageStatusFlow = ai.defineFlow(
     }
   }
 );
+
