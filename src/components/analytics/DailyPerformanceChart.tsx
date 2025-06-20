@@ -132,7 +132,7 @@ const DailyPerformanceChart: React.FC<DailyPerformanceChartProps> = ({
               fontSize={12}
               tickLine={false}
               axisLine={false}
-              domain={[100, 'auto']}
+              domain={[0, 'auto']} // Y-axis starts at 0
               allowDataOverflow={false}
               tickFormatter={(value) => {
                 if (typeof value !== 'number') return String(value);
@@ -179,3 +179,4 @@ const DailyPerformanceChart: React.FC<DailyPerformanceChartProps> = ({
 };
 
 export default DailyPerformanceChart;
+
