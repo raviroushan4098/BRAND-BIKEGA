@@ -8,7 +8,7 @@ import type { StoredInstagramPost } from '@/lib/instagramPostAnalyticsService';
 import {
   saveInstagramPostAnalytics,
   getAllInstagramPostAnalyticsForUser,
-  batchSaveInstagramPostAnalytics
+  // batchSaveInstagramPostAnalytics // Not currently used but available
 } from '@/lib/instagramPostAnalyticsService';
 import { fetchInstagramReelStats, type FetchInstagramReelStatsInput, type InstagramReelStatsOutput } from '@/ai/flows/fetch-instagram-reel-stats-flow';
 
@@ -112,8 +112,10 @@ export default function InstagramAnalyticsPage() {
       loadInitialUserPosts(targetUserId);
     } else {
       setAllFetchedPosts([]);
+      setFetchError(null); 
       setIsLoadingPosts(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, selectedUserIdForAdmin, loadInitialUserPosts]);
 
 
@@ -215,7 +217,7 @@ export default function InstagramAnalyticsPage() {
               caption: statsOutput.caption,
               thumbnailUrl: statsOutput.thumbnailUrl,
               username: statsOutput.username,
-              postedAt: statsOutput.postedAt || new Date(0).toISOString(), // Ensure postedAt is always a string
+              postedAt: statsOutput.postedAt || new Date(0).toISOString(), 
               lastFetched: new Date().toISOString(),
             };
             await saveInstagramPostAnalytics(targetUserId, postToStore);
@@ -227,7 +229,7 @@ export default function InstagramAnalyticsPage() {
                     id: statsOutput.shortcode,
                     reelUrl: reelUrl,
                     likes:0, comments:0, playCount:0,
-                    postedAt: new Date(0).toISOString(), // Ensure postedAt for error records
+                    postedAt: new Date(0).toISOString(),
                     lastFetched: new Date().toISOString(),
                     errorMessage: statsOutput.errorMessage || "Failed to fetch details."
                  });
