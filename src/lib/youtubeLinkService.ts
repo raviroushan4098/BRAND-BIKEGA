@@ -1,6 +1,6 @@
 
 import { db } from './firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, arrayRemove } from 'firebase/firestore';
 
 interface AssignLinksResult {
   success: boolean;
@@ -51,7 +51,6 @@ export const assignYouTubeLinksToUser = async (userId: string, linksToAdd: strin
  */
 export const getYouTubeLinksForUser = async (userId: string): Promise<string[]> => {
   if (!userId) {
-    // console.error("User ID must be provided."); // Removed console log
     return [];
   }
   try {
@@ -61,10 +60,35 @@ export const getYouTubeLinksForUser = async (userId: string): Promise<string[]> 
     if (docSnap.exists() && docSnap.data()?.links) {
       return docSnap.data().links as string[];
     }
-    return []; // No links found or document doesn't exist
+    return []; 
   } catch (error) {
-    // console.error("Error fetching YouTube links for user:", error); // Removed console log
     return [];
+  }
+};
+
+/**
+ * Deletes a specific YouTube link for a user from their document in the 'youtube' collection.
+ * @param userId The ID of the user.
+ * @param linkToDelete The specific link URL to delete.
+ * @returns True if deletion was successful or link wasn't found, false on error.
+ */
+export const deleteYouTubeLinkForUser = async (userId: string, linkToDelete: string): Promise<boolean> => {
+  if (!userId || !linkToDelete) {
+    console.error("User ID and link to delete must be provided for YouTube link deletion.");
+    return false;
+  }
+  try {
+    const userLinksRef = doc(db, 'youtube', userId);
+    await updateDoc(userLinksRef, {
+      links: arrayRemove(linkToDelete)
+    });
+    console.log(`Attempted to delete YouTube link ${linkToDelete} for user ${userId}. If it existed, it's removed.`);
+    // Firestore's arrayRemove doesn't error if the element isn't found, it just does nothing.
+    // So, we assume success unless updateDoc throws.
+    return true;
+  } catch (error) {
+    console.error(`Error deleting YouTube link ${linkToDelete} for user ${userId}:`, error);
+    return false;
   }
 };
 

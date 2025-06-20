@@ -13,9 +13,9 @@ import { Label } from '@/components/ui/label';
 import { useAuth } from '@/hooks/useAuth';
 import type { User } from '@/lib/authService';
 import { getAllUsers as apiGetAllUsers } from '@/lib/authService';
-import { assignYouTubeLinksToUser, getYouTubeLinksForUser } from '@/lib/youtubeLinkService';
+import { assignYouTubeLinksToUser, getYouTubeLinksForUser, deleteYouTubeLinkForUser } from '@/lib/youtubeLinkService';
 import { fetchYouTubeDetails } from '@/ai/flows/fetch-youtube-details-flow';
-import { generateChannelAnalyticsReport, type ChannelAnalyticsReportOutput, type YouTubeVideoForReport } from '@/ai/flows/generate-channel-analytics-report-flow'; // Import channel report flow
+import { generateChannelAnalyticsReport, type ChannelAnalyticsReportOutput, type YouTubeVideoForReport } from '@/ai/flows/generate-channel-analytics-report-flow';
 import {
   saveVideoAnalytics,
   getAllVideoAnalyticsForUser,
@@ -24,14 +24,26 @@ import {
 import { toast } from '@/hooks/use-toast';
 import {
   BarChart3, UserPlus, LinkIcon, FileText, UploadCloud, Users, DownloadCloud, Loader2, YoutubeIcon, Eye, ThumbsUp, MessageSquare, ListVideo,
-  CalendarIcon, ArrowUpDown, XCircle, FilterX, RefreshCw, FileSpreadsheet // Added FileSpreadsheet for PPT download
+  CalendarIcon, ArrowUpDown, XCircle, FilterX, RefreshCw, FileSpreadsheet, ListChecks, Trash2, Search
 } from 'lucide-react';
 import { Skeleton } from "@/components/ui/skeleton";
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Progress } from '@/components/ui/progress';
 import { format, isValid as isValidDate } from 'date-fns';
-import PptxGenJS from 'pptxgenjs'; // Import PptxGenJS
+import PptxGenJS from 'pptxgenjs';
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogDescription, 
+  DialogFooter, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogTrigger,
+  DialogClose
+} from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
+
 
 interface SummaryStats {
   totalVideos: number;
@@ -66,7 +78,15 @@ export default function YouTubeManagementPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshProgress, setRefreshProgress] = useState(0);
 
-  const [isGeneratingChannelReport, setIsGeneratingChannelReport] = useState(false); // State for PPT report generation
+  const [isGeneratingChannelReport, setIsGeneratingChannelReport] = useState(false);
+
+  // State for View Assigned Links Dialog
+  const [isViewLinksDialogOpen, setIsViewLinksDialogOpen] = useState(false);
+  const [assignedLinksForDialog, setAssignedLinksForDialog] = useState<string[]>([]);
+  const [isLoadingAssignedLinks, setIsLoadingAssignedLinks] = useState(false);
+  const [deletingLinkId, setDeletingLinkId] = useState<string | null>(null);
+  const [assignedLinkSearchTerm, setAssignedLinkSearchTerm] = useState('');
+
 
   const fetchUsersForAdmin = useCallback(async () => {
     if (user?.role === 'admin') {
@@ -395,7 +415,6 @@ export default function YouTubeManagementPage() {
         throw new Error("AI model did not return a report.");
       }
       
-      // PPT Generation Logic (adapted from ChannelAnalyticsReportDisplay)
       const pptx = new PptxGenJS();
       pptx.layout = "LAYOUT_WIDE";
       const primaryColor = "3F51B5";
@@ -460,6 +479,41 @@ export default function YouTubeManagementPage() {
     }
   };
 
+  const fetchAssignedLinksForDialog = async () => {
+    if (!selectedUserIdForAdmin) return;
+    setIsLoadingAssignedLinks(true);
+    try {
+      const links = await getYouTubeLinksForUser(selectedUserIdForAdmin);
+      setAssignedLinksForDialog(links);
+    } catch (error) {
+      toast({ title: "Error", description: "Could not fetch assigned YouTube links.", variant: "destructive" });
+      setAssignedLinksForDialog([]);
+    }
+    setIsLoadingAssignedLinks(false);
+  };
+
+  const handleDeleteAssignedLink = async (linkToDelete: string) => {
+    if (!selectedUserIdForAdmin) return;
+    setDeletingLinkId(linkToDelete);
+    const success = await deleteYouTubeLinkForUser(selectedUserIdForAdmin, linkToDelete);
+    if (success) {
+      toast({ title: "Link Deleted", description: `YouTube link "${linkToDelete.substring(0, 30)}..." removed.` });
+      await fetchAssignedLinksForDialog(); 
+
+      const videoIdToDelete = extractYouTubeVideoId(linkToDelete);
+      if (videoIdToDelete) {
+        setAllFetchedVideos(prev => prev.filter(v => v.id !== videoIdToDelete));
+      }
+    } else {
+      toast({ title: "Error", description: "Failed to delete YouTube link.", variant: "destructive" });
+    }
+    setDeletingLinkId(null);
+  };
+  
+  const filteredAssignedLinks = assignedLinksForDialog.filter(link => 
+    link.toLowerCase().includes(assignedLinkSearchTerm.toLowerCase())
+  );
+
 
   return (
     <AppLayout>
@@ -499,7 +553,15 @@ export default function YouTubeManagementPage() {
                 <Label htmlFor="user-select" className="flex items-center mb-2">
                   <Users className="mr-2 h-4 w-4 text-muted-foreground" /> Select User
                 </Label>
-                <Select value={selectedUserIdForAdmin} onValueChange={setSelectedUserIdForAdmin} disabled={isLoadingUsers || isAssigning || isRefreshing}>
+                <Select 
+                  value={selectedUserIdForAdmin} 
+                  onValueChange={(value) => {
+                    setSelectedUserIdForAdmin(value);
+                    setAssignedLinksForDialog([]); 
+                    setAssignedLinkSearchTerm('');
+                  }}
+                  disabled={isLoadingUsers || isAssigning || isRefreshing}
+                >
                   <SelectTrigger id="user-select" className="w-full md:w-1/2">
                     <SelectValue placeholder="Select a user to manage their videos..." />
                   </SelectTrigger>
@@ -523,11 +585,82 @@ export default function YouTubeManagementPage() {
                 <p className="text-xs text-muted-foreground">CSV should contain one YouTube URL per line, in a column with the header "link".</p>
               </div>
             </CardContent>
-            <CardFooter>
+            <CardFooter className="flex justify-between items-center">
               <Button onClick={handleAssignLinks} disabled={isAssigning || isRefreshing || !selectedUserIdForAdmin || (!singleLink && !csvFile)}>
                 {isAssigning ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <UploadCloud className="mr-2 h-5 w-5" />}
                 {isAssigning ? 'Assigning...' : 'Assign Links & Refresh'}
               </Button>
+               <Dialog open={isViewLinksDialogOpen} onOpenChange={(open) => {
+                  setIsViewLinksDialogOpen(open);
+                  if (open && selectedUserIdForAdmin) {
+                    fetchAssignedLinksForDialog();
+                  } else if (!open) {
+                    setAssignedLinkSearchTerm(''); 
+                  }
+              }}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" disabled={!selectedUserIdForAdmin || isLoadingUsers || isRefreshing || isAssigning}>
+                    <ListChecks className="mr-2 h-5 w-5" /> View Assigned Links
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-lg">
+                  <DialogHeader>
+                    <DialogTitle>Assigned YouTube Links</DialogTitle>
+                    <DialogDescription>
+                      Manage YouTube links for {usersForAdminSelect.find(u => u.id === selectedUserIdForAdmin)?.name || 'the selected user'}.
+                      Deleting a link here will remove it from tracking and remove any fetched data for that video.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="my-4">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input 
+                        type="search" 
+                        placeholder="Search links..." 
+                        value={assignedLinkSearchTerm}
+                        onChange={(e) => setAssignedLinkSearchTerm(e.target.value)}
+                        className="pl-10"
+                      />
+                    </div>
+                  </div>
+                  <ScrollArea className="h-[300px] border rounded-md p-2">
+                    {isLoadingAssignedLinks ? (
+                      <div className="flex items-center justify-center h-full">
+                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                      </div>
+                    ) : filteredAssignedLinks.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-4">
+                        {assignedLinksForDialog.length > 0 ? "No links match your search." : "No YouTube links assigned to this user."}
+                      </p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {filteredAssignedLinks.map((link, index) => (
+                          <li key={index} className="flex items-center justify-between p-2 hover:bg-muted/50 rounded-md text-sm">
+                            <a href={link} target="_blank" rel="noopener noreferrer" className="truncate hover:underline" title={link}>
+                              {link.length > 50 ? `${link.substring(0,47)}...` : link}
+                            </a>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-7 w-7 text-destructive" 
+                              onClick={() => handleDeleteAssignedLink(link)}
+                              disabled={deletingLinkId === link}
+                              aria-label={`Delete link ${link}`}
+                            >
+                              {deletingLinkId === link ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                            </Button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </ScrollArea>
+                  <DialogFooter>
+                    <DialogClose asChild>
+                      <Button type="button" variant="outline">Close</Button>
+                    </DialogClose>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </CardFooter>
           </Card>
         )}
