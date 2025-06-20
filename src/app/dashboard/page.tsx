@@ -1,13 +1,19 @@
 
+"use client";
+
 import AppLayout from '@/components/layout/AppLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { Youtube, Instagram, Lightbulb, Users, BarChart3, MessageSquareQuote } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth'; // Import useAuth
+
 // Removed Image import as it's no longer used for the dashboard hero
 // import Image from 'next/image'; 
 
 export default function DashboardPage() {
+  const { user } = useAuth(); // Get user from auth context
+
   return (
     <AppLayout>
       <div className="container mx-auto py-8 px-4 md:px-6">
@@ -31,6 +37,7 @@ export default function DashboardPage() {
               loop
               className="rounded-lg shadow-md object-cover"
               src="/dashboard-video.mp4" // Assumes video is in public/dashboard-video.mp4
+              data-ai-hint="dashboard explainer"
             >
               Sorry, your browser doesn't support embedded videos. You can 
               <a href="/dashboard-video.mp4">download it</a>
@@ -54,14 +61,16 @@ export default function DashboardPage() {
             link="/suggestions"
             linkLabel="Get Suggestions"
           />
-          <FeatureCard
-            icon={<Users className="h-8 w-8 text-secondary-foreground" />}
-            title="User Management"
-            description="Admins can easily manage user access and assign specific channels for tracking."
-            link="/admin/users"
-            linkLabel="Manage Users"
-            adminOnly
-          />
+          {user?.role === 'admin' && (
+            <FeatureCard
+              icon={<Users className="h-8 w-8 text-secondary-foreground" />}
+              title="User Management"
+              description="Admins can easily manage user access and assign specific channels for tracking."
+              link="/admin/users"
+              linkLabel="Manage Users"
+              adminOnly
+            />
+          )}
         </div>
 
         <Card>
@@ -72,7 +81,9 @@ export default function DashboardPage() {
             <QuickLinkButton href="/youtube" icon={<Youtube />} label="YouTube" />
             <QuickLinkButton href="/instagram" icon={<Instagram />} label="Instagram" />
             <QuickLinkButton href="/suggestions" icon={<Lightbulb />} label="Suggestions" />
-            <QuickLinkButton href="/admin/users" icon={<Users />} label="Admin" adminOnly />
+            {user?.role === 'admin' && (
+              <QuickLinkButton href="/admin/users" icon={<Users />} label="Admin" adminOnly />
+            )}
           </CardContent>
         </Card>
       </div>
