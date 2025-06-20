@@ -77,6 +77,7 @@ export default function YouTubeManagementPage() {
 
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshProgress, setRefreshProgress] = useState(0);
+  const [lastRefreshTimestamp, setLastRefreshTimestamp] = useState<Date | null>(null);
 
   const [isGeneratingChannelReport, setIsGeneratingChannelReport] = useState(false);
 
@@ -150,7 +151,7 @@ export default function YouTubeManagementPage() {
       toast({ title: "Storage Error", description: "Failed to load cached video data.", variant: "destructive" });
     }
     setIsLoadingVideos(false);
-  }, []);
+  }, [toast]);
 
   useEffect(() => {
     const targetUserId = user?.role === 'admin' && selectedUserIdForAdmin ? selectedUserIdForAdmin : user?.id;
@@ -269,6 +270,7 @@ export default function YouTubeManagementPage() {
       }
 
       setAllFetchedVideos(updatedVideosForState); 
+      setLastRefreshTimestamp(new Date());
       toast({ title: "Feed Refreshed", description: `Successfully updated ${updatedVideosForState.length} videos.` });
 
     } catch (error: any) {
@@ -717,12 +719,21 @@ export default function YouTubeManagementPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle className="text-xl font-semibold">Performance Overview</CardTitle>
-                  <CardDescription> Summary for {user?.role === 'admin' && selectedUserIdForAdmin ? `${usersForAdminSelect.find(u=>u.id === selectedUserIdForAdmin)?.name || 'the selected user'}'s` : "your"} {summaryStats.totalVideos} video(s) { (dateRange.from || dateRange.to) ? "(filtered)" : ""}. </CardDescription>
+                  <CardDescription>
+                    Summary for {user?.role === 'admin' && selectedUserIdForAdmin ? `${usersForAdminSelect.find(u=>u.id === selectedUserIdForAdmin)?.name || 'the selected user'}'s` : "your"} {summaryStats.totalVideos} video(s) { (dateRange.from || dateRange.to) ? "(filtered)" : ""}.
+                  </CardDescription>
                 </div>
-                <Button onClick={handleRefreshFeed} disabled={isRefreshing || isLoadingVideos || isGeneratingChannelReport} variant="outline" size="sm">
-                  <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-                  {isRefreshing ? 'Refreshing...' : 'Refresh Feed'}
-                </Button>
+                <div className="flex flex-col items-end">
+                  <Button onClick={handleRefreshFeed} disabled={isRefreshing || isLoadingVideos || isGeneratingChannelReport} variant="outline" size="sm">
+                    <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                    {isRefreshing ? 'Refreshing...' : 'Refresh Feed'}
+                  </Button>
+                  {lastRefreshTimestamp && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Last refreshed: {format(lastRefreshTimestamp, "MMM d, yyyy, h:mm a")}
+                    </p>
+                  )}
+                </div>
               </div>
             </CardHeader>
             <CardContent className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-4">
