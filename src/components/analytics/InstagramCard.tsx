@@ -1,8 +1,8 @@
 
-import type { StoredInstagramPost } from '@/lib/instagramPostAnalyticsService'; // Updated import
+import type { StoredInstagramPost } from '@/lib/instagramPostAnalyticsService';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import Image from 'next/image';
-import { Heart, MessageCircle, CalendarDays, PlayCircle } from 'lucide-react'; // Added PlayCircle
+import { Heart, MessageCircle, CalendarDays, PlayCircle, Share2 } from 'lucide-react'; // Added Share2
 import { formatDistanceToNow, parseISO, isValid as isValidDate } from 'date-fns';
 import Link from 'next/link';
 
@@ -37,7 +37,7 @@ const InstagramCard: React.FC<InstagramCardProps> = ({ post }) => {
             layout="fill"
             data-ai-hint="social media post"
             className="rounded-t-lg object-cover"
-            unoptimized={!!post.thumbnailUrl?.includes('cdninstagram')} // Consider if RapidAPI URLs need unoptimization
+            unoptimized={!!post.thumbnailUrl?.includes('cdninstagram')}
           />
         </Link>
       </CardHeader>
@@ -47,7 +47,7 @@ const InstagramCard: React.FC<InstagramCardProps> = ({ post }) => {
         </p>
         {post.username && <p className="text-xs font-medium text-primary truncate mb-1.5">@{post.username}</p>}
         
-        <div className="grid grid-cols-3 gap-1 text-xs text-muted-foreground">
+        <div className="grid grid-cols-2 gap-1 text-xs text-muted-foreground">
           <div className="flex items-center" title="Likes">
             <Heart className="h-3.5 w-3.5 mr-1 text-red-500" />
             {(post.likes || 0).toLocaleString()}
@@ -59,6 +59,10 @@ const InstagramCard: React.FC<InstagramCardProps> = ({ post }) => {
           <div className="flex items-center" title="Plays">
             <PlayCircle className="h-3.5 w-3.5 mr-1 text-green-500" />
             {(post.playCount || 0).toLocaleString()}
+          </div>
+          <div className="flex items-center" title="Reshares">
+            <Share2 className="h-3.5 w-3.5 mr-1 text-purple-500" /> {/* Added Reshares */}
+            {(post.reshareCount || 0).toLocaleString()}
           </div>
         </div>
       </CardContent>

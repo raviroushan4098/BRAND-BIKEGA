@@ -23,7 +23,8 @@ export interface StoredInstagramPost {
   postedAt?: string; // ISO string when the reel was posted
   likes: number;
   comments: number;
-  playCount: number; // Mapped from API's play_count or video_view_count
+  playCount: number;
+  reshareCount?: number; // Added reshareCount
   lastFetched: string; // ISO string, timestamp of when data was last fetched from API
   errorMessage?: string; // If fetching stats for this reel failed
 }
@@ -43,7 +44,6 @@ export const saveInstagramPostAnalytics = async (userId: string, postData: Store
     const postDocRef = doc(db, 'userInstagramPostAnalytics', userId, 'posts', postData.id);
     const dataToSave: StoredInstagramPost = {
       ...postData,
-      // Ensure lastFetched is always updated on save, even if already present in postData
       lastFetched: new Date().toISOString(), 
     };
     await setDoc(postDocRef, dataToSave, { merge: true });
@@ -78,9 +78,8 @@ export const getAllInstagramPostAnalyticsForUser = async (userId: string): Promi
     return posts;
   } catch (error) {
     console.error(`[InstagramService] Error fetching all Instagram post analytics for user ${userId} (primary query):`, error, "Attempting fallback query...");
-    // Attempt fallback ordering if 'postedAt' composite query fails
     try {
-        posts = []; // Reset posts array for fallback
+        posts = []; 
         const postsCollectionRef = collection(db, 'userInstagramPostAnalytics', userId, 'posts');
         const fallbackQuery = query(postsCollectionRef, orderBy('lastFetched', 'desc'));
         const fallbackSnapshot = await getDocs(fallbackQuery);
@@ -91,7 +90,7 @@ export const getAllInstagramPostAnalyticsForUser = async (userId: string): Promi
         return posts;
     } catch (fallbackError) {
         console.error(`[InstagramService] Error fetching all Instagram post analytics for user ${userId} (fallback query):`, fallbackError);
-        return []; // Return empty on final error
+        return []; 
     }
   }
 };
@@ -153,4 +152,3 @@ export const batchSaveInstagramPostAnalytics = async (userId: string, postsData:
     throw error;
   }
 };
-

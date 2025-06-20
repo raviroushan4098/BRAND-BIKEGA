@@ -50,6 +50,7 @@ const InstagramReelStatsOutputSchema = z.object({
   commentCount: z.number().optional().default(0),
   likeCount: z.number().optional().default(0),
   playCount: z.number().optional().default(0),
+  reshareCount: z.number().optional().default(0), // Added reshareCount
   caption: z.string().optional(),
   thumbnailUrl: z.string().url().optional(),
   username: z.string().optional(),
@@ -157,10 +158,10 @@ const fetchInstagramReelStatsFlow = ai.defineFlow(
       const responseData = await response.json();
       console.log(`[fetchInstagramReelStatsFlow] Parsed API response data for ${shortcode}:`, JSON.stringify(responseData, null, 2).substring(0,1000) + '...');
       
-      // Directly use responseData as postData based on new sample
+      // Use responseData directly based on sample
       const postData = responseData; 
 
-      if (!postData) { // Should not happen if response.ok and response.json() succeeded
+      if (!postData) {
          console.error(`[fetchInstagramReelStatsFlow] API response parsed but was unexpectedly empty for ${shortcode}.`);
          return {
             shortcode,
@@ -186,13 +187,15 @@ const fetchInstagramReelStatsFlow = ai.defineFlow(
       const commentCount = Number(postData.comment_count) || 0;
       const likeCount = Number(postData.like_count) || 0;
       const playCount = Number(postData.play_count) || 0;
-      const thumbnailUrl = postData.image_versions2?.candidates?.[0]?.url; // Taking the first candidate
+      const reshareCount = Number(postData.reshare_count) || 0; // Extract reshare_count
+      const thumbnailUrl = postData.image_versions2?.candidates?.[0]?.url;
       const username = postData.user?.username;
 
       console.log(`[fetchInstagramReelStatsFlow] Final extracted stats for ${shortcode}:
         - Comment Count: ${commentCount}
         - Like Count: ${likeCount}
         - Play Count: ${playCount}
+        - Reshare Count: ${reshareCount}
         - Thumbnail URL: ${thumbnailUrl ? thumbnailUrl.substring(0,50) + "..." : "undefined"}
         - Username: ${username}`);
       
@@ -202,6 +205,7 @@ const fetchInstagramReelStatsFlow = ai.defineFlow(
         commentCount,
         likeCount,
         playCount,
+        reshareCount, // Include reshareCount
         caption: captionText,
         thumbnailUrl,
         username,
@@ -220,4 +224,3 @@ const fetchInstagramReelStatsFlow = ai.defineFlow(
     }
   }
 );
-

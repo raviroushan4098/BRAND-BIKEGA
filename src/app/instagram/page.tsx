@@ -8,7 +8,6 @@ import type { StoredInstagramPost } from '@/lib/instagramPostAnalyticsService';
 import {
   saveInstagramPostAnalytics,
   getAllInstagramPostAnalyticsForUser,
-  // batchSaveInstagramPostAnalytics // Not currently used but available
 } from '@/lib/instagramPostAnalyticsService';
 import { fetchInstagramReelStats, type FetchInstagramReelStatsInput, type InstagramReelStatsOutput } from '@/ai/flows/fetch-instagram-reel-stats-flow';
 
@@ -24,7 +23,7 @@ import { assignInstagramLinksToUser, getInstagramLinksForUser } from '@/lib/inst
 import { toast } from '@/hooks/use-toast';
 import {
   BarChart3, UserPlus, LinkIcon, FileText, UploadCloud, Users, DownloadCloud, Loader2, Instagram as InstagramUIIcon, Eye, Heart, MessageSquare, ListFilter,
-  CalendarIcon, ArrowUpDown, XCircle, FilterX, RefreshCw, PlayCircle
+  CalendarIcon, ArrowUpDown, XCircle, FilterX, RefreshCw, PlayCircle, Share2
 } from 'lucide-react';
 import { Skeleton } from "@/components/ui/skeleton";
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -37,12 +36,14 @@ interface SummaryStats {
   totalLikes: number;
   totalComments: number;
   totalPlays: number;
+  totalReshares: number; // Added for summary
   averageLikesPerPost: number;
   averageCommentsPerPost: number;
   averagePlaysPerPost: number;
+  averageResharesPerPost: number; // Added for summary
 }
 
-type SortablePostKey = 'postedAt' | 'likes' | 'comments' | 'playCount';
+type SortablePostKey = 'postedAt' | 'likes' | 'comments' | 'playCount' | 'reshareCount';
 
 export default function InstagramAnalyticsPage() {
   const { user } = useAuth();
@@ -164,14 +165,17 @@ export default function InstagramAnalyticsPage() {
       const totalLikes = postsToDisplay.reduce((sum, post) => sum + (post.likes || 0), 0);
       const totalComments = postsToDisplay.reduce((sum, post) => sum + (post.comments || 0), 0);
       const totalPlays = postsToDisplay.reduce((sum, post) => sum + (post.playCount || 0), 0);
+      const totalReshares = postsToDisplay.reduce((sum, post) => sum + (post.reshareCount || 0), 0);
       setSummaryStats({
         totalPosts: postsToDisplay.length,
         totalLikes,
         totalComments,
         totalPlays,
+        totalReshares,
         averageLikesPerPost: parseFloat((totalLikes / postsToDisplay.length).toFixed(1)) || 0,
         averageCommentsPerPost: parseFloat((totalComments / postsToDisplay.length).toFixed(1)) || 0,
         averagePlaysPerPost: parseFloat((totalPlays / postsToDisplay.length).toFixed(1)) || 0,
+        averageResharesPerPost: parseFloat((totalReshares / postsToDisplay.length).toFixed(1)) || 0,
       });
     } else {
       setSummaryStats(null);
@@ -216,6 +220,7 @@ export default function InstagramAnalyticsPage() {
               likes: statsOutput.likeCount || 0,
               comments: statsOutput.commentCount || 0,
               playCount: statsOutput.playCount || 0,
+              reshareCount: statsOutput.reshareCount || 0, // Include reshareCount
               caption: statsOutput.caption,
               thumbnailUrl: statsOutput.thumbnailUrl,
               username: statsOutput.username,
@@ -230,7 +235,7 @@ export default function InstagramAnalyticsPage() {
                  await saveInstagramPostAnalytics(targetUserId, {
                     id: statsOutput.shortcode,
                     reelUrl: reelUrl,
-                    likes:0, comments:0, playCount:0,
+                    likes:0, comments:0, playCount:0, reshareCount:0,
                     postedAt: new Date(0).toISOString(),
                     lastFetched: new Date().toISOString(),
                     errorMessage: statsOutput.errorMessage || "Failed to fetch details."
@@ -404,7 +409,7 @@ export default function InstagramAnalyticsPage() {
         {user?.role === 'admin' && (
           <Card className="mb-8 shadow-lg">
             <CardHeader>
-              <div className="flex items-center gap-3"><UserPlus className="h-6 w-6 text-accent" /> <CardTitle className="text-2xl font-semibold">Assign Instagram Reel Links</CardTitle></div>
+              <div className="flex items-center gap-3"><UserPlus className="mr-2 h-6 w-6 text-accent" /> <CardTitle className="text-2xl font-semibold">Assign Instagram Reel Links</CardTitle></div>
               <CardDescription>Select a user and provide Instagram Reel links to track. Stats will be fetched automatically.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -431,7 +436,7 @@ export default function InstagramAnalyticsPage() {
             <CardFooter>
               <Button onClick={handleAssignLinks} disabled={isAssigning || isRefreshing || !selectedUserIdForAdmin || (!singleLink && !csvFile)}>
                 {isAssigning ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <UploadCloud className="mr-2 h-5 w-5" />}
-                {isAssigning ? 'Assigning...' : 'Assign Reel Links & Fetch Stats'}
+                {isAssigning ? 'Assigning & Fetching...' : 'Assign Reel Links & Fetch Stats'}
               </Button>
             </CardFooter>
           </Card>
@@ -464,6 +469,7 @@ export default function InstagramAnalyticsPage() {
                     <SelectItem value="likes">Likes</SelectItem>
                     <SelectItem value="comments">Comments</SelectItem>
                     <SelectItem value="playCount">Plays</SelectItem>
+                    <SelectItem value="reshareCount">Reshares</SelectItem>
                   </SelectContent>
                 </Select>
                 <Button variant="outline" size="icon" onClick={toggleSortOrder} title={`Sort ${sortConfig.order === 'asc'?'Desc':'Asc'}`} disabled={isRefreshing}><ArrowUpDown className="h-4 w-4" /></Button>
@@ -483,11 +489,12 @@ export default function InstagramAnalyticsPage() {
                 <CardTitle className="text-xl font-semibold">Performance Overview</CardTitle>
                 <CardDescription>Summary for {user?.role === 'admin' && selectedUserIdForAdmin ? `${usersForAdminSelect.find(u=>u.id === selectedUserIdForAdmin)?.name || 'selected user'}'s` : "your"} {summaryStats.totalPosts} reel(s) {(dateRange.from||dateRange.to)?"(filtered)":""}.</CardDescription>
             </CardHeader>
-            <CardContent className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+            <CardContent className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               <StatCard icon={ListFilter} label="Total Reels" value={summaryStats.totalPosts} />
               <StatCard icon={Heart} label="Total Likes" value={summaryStats.totalLikes} />
               <StatCard icon={MessageSquare} label="Total Comments" value={summaryStats.totalComments} />
               <StatCard icon={PlayCircle} label="Total Plays" value={summaryStats.totalPlays} />
+              <StatCard icon={Share2} label="Total Reshares" value={summaryStats.totalReshares} />
               <StatCard icon={Eye} label="Avg Plays" value={summaryStats.averagePlaysPerPost} />
             </CardContent>
           </Card>
@@ -521,4 +528,3 @@ export default function InstagramAnalyticsPage() {
     </AppLayout>
   );
 }
-
