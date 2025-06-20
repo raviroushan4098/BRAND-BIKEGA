@@ -220,7 +220,7 @@ export default function InstagramAnalyticsPage() {
               likes: statsOutput.likeCount || 0,
               comments: statsOutput.commentCount || 0,
               playCount: statsOutput.playCount || 0,
-              reshareCount: statsOutput.reshareCount || 0, // Include reshareCount
+              reshareCount: statsOutput.reshareCount || 0,
               caption: statsOutput.caption,
               thumbnailUrl: statsOutput.thumbnailUrl,
               username: statsOutput.username,
@@ -485,9 +485,20 @@ export default function InstagramAnalyticsPage() {
 
         {(!isLoadingPosts || isRefreshing) && summaryStats && (
           <Card className="mb-6 shadow-md">
-            <CardHeader>
-                <CardTitle className="text-xl font-semibold">Performance Overview</CardTitle>
-                <CardDescription>Summary for {user?.role === 'admin' && selectedUserIdForAdmin ? `${usersForAdminSelect.find(u=>u.id === selectedUserIdForAdmin)?.name || 'selected user'}'s` : "your"} {summaryStats.totalPosts} reel(s) {(dateRange.from||dateRange.to)?"(filtered)":""}.</CardDescription>
+            <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                    <CardTitle className="text-xl font-semibold">Performance Overview</CardTitle>
+                    <CardDescription>Summary for {user?.role === 'admin' && selectedUserIdForAdmin ? `${usersForAdminSelect.find(u=>u.id === selectedUserIdForAdmin)?.name || 'selected user'}'s` : "your"} {summaryStats.totalPosts} reel(s) {(dateRange.from||dateRange.to)?"(filtered)":""}.</CardDescription>
+                </div>
+                <Button 
+                    onClick={handleRefreshFeed} 
+                    disabled={isRefreshing || isLoadingPosts || !currentTargetUserId}
+                    variant="outline"
+                    size="sm"
+                  >
+                    <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin':''}`} /> 
+                    {isRefreshing ? 'Refreshing...':'Refresh'}
+                </Button>
             </CardHeader>
             <CardContent className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               <StatCard icon={ListFilter} label="Total Reels" value={summaryStats.totalPosts} />
@@ -528,3 +539,4 @@ export default function InstagramAnalyticsPage() {
     </AppLayout>
   );
 }
+
