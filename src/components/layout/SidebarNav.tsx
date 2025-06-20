@@ -22,6 +22,7 @@ import {
   Settings,
   HelpCircle,
   KeyRound,
+  BarChart3, // Added for Overall Analytics
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -31,7 +32,8 @@ const SidebarNav = () => {
 
   const navItems = [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { href: '/youtube', label: 'YouTube Management', icon: Youtube }, // Updated label
+    { href: '/analytics', label: 'Overall Analytics', icon: BarChart3 }, // New Item
+    { href: '/youtube', label: 'YouTube Management', icon: Youtube },
     { href: '/instagram', label: 'Instagram Analytics', icon: Instagram },
     { href: '/suggestions', label: 'AI Suggestions', icon: Lightbulb },
   ];
@@ -89,3 +91,4 @@ const SidebarNav = () => {
 };
 
 export default SidebarNav;
+
