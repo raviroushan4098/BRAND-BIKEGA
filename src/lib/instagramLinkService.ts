@@ -8,10 +8,10 @@ interface AssignLinksResult {
 }
 
 /**
- * Assigns or updates Instagram profile links for a specific user.
+ * Assigns or updates Instagram links for a specific user.
  * Links are stored in an array field named 'links' within a document identified by the userId in the 'instagramProfileLinks' collection.
  * @param userId The ID of the user.
- * @param linksToAdd An array of new Instagram profile URLs to add.
+ * @param linksToAdd An array of new Instagram links (profiles, reels, etc.) to add.
  * @returns An object indicating success and the count of links actually added.
  */
 export const assignInstagramLinksToUser = async (userId: string, linksToAdd: string[]): Promise<AssignLinksResult> => {
@@ -42,9 +42,9 @@ export const assignInstagramLinksToUser = async (userId: string, linksToAdd: str
 };
 
 /**
- * Retrieves the list of Instagram profile links for a specific user.
+ * Retrieves the list of Instagram links for a specific user.
  * @param userId The ID of the user.
- * @returns An array of Instagram profile links, or an empty array if none are found or an error occurs.
+ * @returns An array of Instagram links, or an empty array if none are found or an error occurs.
  */
 export const getInstagramLinksForUser = async (userId: string): Promise<string[]> => {
   if (!userId) {

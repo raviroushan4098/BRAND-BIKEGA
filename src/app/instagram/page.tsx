@@ -185,7 +185,7 @@ export default function InstagramAnalyticsPage() {
       const links = await getInstagramLinksForUser(targetUserId);
       if (links.length === 0) {
         setAllFetchedPosts([]); 
-        toast({ title: "No Links", description: "No Instagram profiles assigned.", variant: "default" });
+        toast({ title: "No Links", description: "No Instagram links assigned.", variant: "default" });
         setIsRefreshing(false);
         return;
       }
@@ -193,7 +193,7 @@ export default function InstagramAnalyticsPage() {
       // Placeholder: Simulate fetching and saving for each link
       // In a real app, you'd call your Instagram API fetching flow here for each link/profile
       // then save the results to Firestore using an instagramPostAnalyticsService.
-      toast({ title: "Refresh Started (Simulated)", description: `Simulating fetch for ${links.length} Instagram profile(s).` });
+      toast({ title: "Refresh Started (Simulated)", description: `Simulating fetch for ${links.length} Instagram link(s).` });
       for (let i = 0; i < links.length; i++) {
         // Simulate API call and save
         await new Promise(resolve => setTimeout(resolve, 300)); 
@@ -215,15 +215,16 @@ export default function InstagramAnalyticsPage() {
 
 
   const handleDownloadCsvTemplate = () => {
-    const csvContent = "link\n"; // Instagram profile links
+    const csvContent = "link\n"; // Instagram links
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    link.setAttribute("href", URL.createObjectURL(blob));
-    link.setAttribute("download", "instagram_profiles_template.csv");
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const linkEl = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    linkEl.setAttribute("href", url);
+    linkEl.setAttribute("download", "instagram_links_template.csv");
+    linkEl.style.visibility = 'hidden';
+    document.body.appendChild(linkEl);
+    linkEl.click();
+    document.body.removeChild(linkEl);
     URL.revokeObjectURL(url);
   };
 
@@ -280,14 +281,14 @@ export default function InstagramAnalyticsPage() {
     
     const uniqueLinks = Array.from(new Set(linksFromInput));
     if (uniqueLinks.length === 0) {
-      toast({ title: "No Valid Links", description: "No valid Instagram profile links found.", variant: "destructive" });
+      toast({ title: "No Valid Links", description: "No valid Instagram links found.", variant: "destructive" });
       setIsAssigning(false); return;
     }
 
     const result = await assignInstagramLinksToUser(selectedUserIdForAdmin, uniqueLinks);
     if (result.success) {
       const targetUser = usersForAdminSelect.find(u => u.id === selectedUserIdForAdmin);
-      toast({ title: "Links Assigned", description: `Assigned ${result.actuallyAddedCount} new profile link(s) to ${targetUser?.name || 'user'}. Refreshing feed.` });
+      toast({ title: "Links Assigned", description: `Assigned ${result.actuallyAddedCount} new link(s) to ${targetUser?.name || 'user'}. Refreshing feed.` });
       setSingleLink(''); setCsvFile(null);
       const fileInput = document.getElementById('instagram-csv-upload') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
@@ -327,7 +328,7 @@ export default function InstagramAnalyticsPage() {
             </div>
             <CardDescription>
               {user?.role === 'admin' 
-                ? "Assign Instagram profile links, view tracked posts, and manage data." 
+                ? "Assign Instagram links, view tracked posts, and manage data." 
                 : "Overview of Instagram post performance. Refresh to get latest data (simulated)."
               }
             </CardDescription>
@@ -343,8 +344,8 @@ export default function InstagramAnalyticsPage() {
         {user?.role === 'admin' && (
           <Card className="mb-8 shadow-lg">
             <CardHeader>
-              <div className="flex items-center gap-3"><UserPlus className="h-6 w-6 text-accent" /> <CardTitle className="text-2xl font-semibold">Assign Instagram Profiles</CardTitle></div>
-              <CardDescription>Select a user and provide Instagram profile URLs to track.</CardDescription>
+              <div className="flex items-center gap-3"><UserPlus className="h-6 w-6 text-accent" /> <CardTitle className="text-2xl font-semibold">Assign Instagram Links</CardTitle></div>
+              <CardDescription>Select a user and provide Instagram links (profiles, reels, etc.) to track.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div>
@@ -355,8 +356,8 @@ export default function InstagramAnalyticsPage() {
                 </Select>
               </div>
               <div>
-                <Label htmlFor="single-link-instagram" className="flex items-center mb-2"><LinkIcon className="mr-2 h-4 w-4" /> Add Single Profile URL</Label>
-                <Input id="single-link-instagram" type="url" placeholder="https://www.instagram.com/username" value={singleLink} onChange={(e) => setSingleLink(e.target.value)} className="w-full md:w-1/2" disabled={isAssigning || isRefreshing} />
+                <Label htmlFor="single-link-instagram" className="flex items-center mb-2"><LinkIcon className="mr-2 h-4 w-4" /> Add Single Instagram Link</Label>
+                <Input id="single-link-instagram" type="url" placeholder="e.g., https://www.instagram.com/username or /reel/..." value={singleLink} onChange={(e) => setSingleLink(e.target.value)} className="w-full md:w-1/2" disabled={isAssigning || isRefreshing} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="instagram-csv-upload" className="flex items-center"><FileText className="mr-2 h-4 w-4" /> Or Upload CSV</Label>
@@ -364,13 +365,13 @@ export default function InstagramAnalyticsPage() {
                   <Input id="instagram-csv-upload" type="file" accept=".csv" onChange={(e) => setCsvFile(e.target.files ? e.target.files[0] : null)} className="w-full md:w-1/2 pt-2" disabled={isAssigning || isRefreshing} />
                   <Button variant="outline" onClick={handleDownloadCsvTemplate} disabled={isAssigning || isRefreshing} className="w-full sm:w-auto"><DownloadCloud className="mr-2 h-4 w-4" /> Template</Button>
                 </div>
-                <p className="text-xs text-muted-foreground">CSV: one Instagram profile URL per line, column header "link".</p>
+                <p className="text-xs text-muted-foreground">CSV: one Instagram link (profile, reel, etc.) per line, column header "link".</p>
               </div>
             </CardContent>
             <CardFooter>
               <Button onClick={handleAssignLinks} disabled={isAssigning || isRefreshing || !selectedUserIdForAdmin || (!singleLink && !csvFile)}>
                 {isAssigning ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <UploadCloud className="mr-2 h-5 w-5" />}
-                {isAssigning ? 'Assigning...' : 'Assign Profiles'}
+                {isAssigning ? 'Assigning...' : 'Assign Links'}
               </Button>
             </CardFooter>
           </Card>
@@ -444,7 +445,7 @@ export default function InstagramAnalyticsPage() {
                 : isLoadingPosts && !isRefreshing ? 'Loading post information...' 
                 : fetchError ? `Error: ${fetchError}`
                 : postsToDisplay.length > 0 ? `Displaying ${postsToDisplay.length} of ${allFetchedPosts.length} post(s). Sorted by ${sortConfig.key} (${sortConfig.order}). (Current data is mock)`
-                : 'No Instagram posts to display. Assign profiles or try "Refresh Feed" (simulated).'
+                : 'No Instagram posts to display. Assign links or try "Refresh Feed" (simulated).'
               }
             </CardDescription>
           </CardHeader>
@@ -453,7 +454,7 @@ export default function InstagramAnalyticsPage() {
             : postsToDisplay.length > 0 ? (<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">{postsToDisplay.map((post) => (<InstagramCard key={post.id} post={post} />))}</div>) 
             : (<div className="text-center py-10 text-muted-foreground"><InstagramUIIcon className="h-16 w-16 mx-auto mb-4 opacity-50" />
                 {fetchError && !isLoadingPosts && !isRefreshing && <p className="text-destructive mb-2">{fetchError}</p>}
-                <p>No Instagram posts to display. Try assigning profiles (admin) or "Refresh Feed" (simulated).</p>
+                <p>No Instagram posts to display. Try assigning links (admin) or "Refresh Feed" (simulated).</p>
               </div>
             )}
           </CardContent>
