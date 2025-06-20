@@ -23,13 +23,25 @@ import { assignInstagramLinksToUser, getInstagramLinksForUser } from '@/lib/inst
 import { toast } from '@/hooks/use-toast';
 import {
   BarChart3, UserPlus, LinkIcon, FileText, UploadCloud, Users, DownloadCloud, Loader2, Instagram as InstagramUIIcon, Eye, Heart, MessageSquare, ListFilter,
-  CalendarIcon, ArrowUpDown, XCircle, FilterX, RefreshCw, PlayCircle, Share2, FileSpreadsheet
+  CalendarIcon, ArrowUpDown, XCircle, FilterX, RefreshCw, PlayCircle, Share2, FileSpreadsheet as CsvIcon, FileBarChart2 as PptIcon, ChevronDown, Loader2 as ReportLoaderIcon
 } from 'lucide-react';
 import { Skeleton } from "@/components/ui/skeleton";
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Progress } from '@/components/ui/progress';
 import { format, isValid as isValidDate, parseISO } from 'date-fns';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { 
+  generateInstagramAnalyticsReport, 
+  type InstagramAnalyticsReportOutput, 
+  type InstagramReelForReport 
+} from '@/ai/flows/generate-instagram-analytics-report-flow';
+import PptxGenJS from 'pptxgenjs';
 
 interface SummaryStats {
   totalPosts: number;
@@ -68,6 +80,8 @@ export default function InstagramAnalyticsPage() {
 
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshProgress, setRefreshProgress] = useState(0);
+  const [isGeneratingPptReport, setIsGeneratingPptReport] = useState(false);
+
 
   const fetchUsersForAdmin = useCallback(async () => {
     if (user?.role === 'admin') {
@@ -236,7 +250,7 @@ export default function InstagramAnalyticsPage() {
                     id: statsOutput.shortcode,
                     reelUrl: reelUrl,
                     likes:0, comments:0, playCount:0, reshareCount:0,
-                    postedAt: statsOutput.postedAt || new Date(0).toISOString(), // Ensure postedAt exists
+                    postedAt: statsOutput.postedAt || new Date(0).toISOString(), 
                     lastFetched: new Date().toISOString(),
                     errorMessage: statsOutput.errorMessage || "Failed to fetch details."
                  });
@@ -378,7 +392,6 @@ export default function InstagramAnalyticsPage() {
   
     const escapeCsvCell = (cellData: any): string => {
       const stringVal = String(cellData === undefined || cellData === null ? '' : cellData);
-      // Wrap in double quotes, escape existing double quotes by doubling them
       return `"${stringVal.replace(/"/g, '""')}"`;
     };
   
@@ -412,7 +425,108 @@ export default function InstagramAnalyticsPage() {
     document.body.removeChild(linkEl);
     URL.revokeObjectURL(url);
   
-    toast({ title: "Report Downloaded", description: "Instagram reels report generated successfully." });
+    toast({ title: "CSV Report Downloaded", description: "Instagram reels report generated successfully." });
+  };
+
+  const handleDownloadInstagramReportPpt = async () => {
+    if (postsToDisplay.length === 0) {
+      toast({ title: "No Data", description: "No reels to include in the PPT report.", variant: "default" });
+      return;
+    }
+    setIsGeneratingPptReport(true);
+    toast({ title: "Generating PPT Report", description: "AI is preparing your Instagram report. This may take a moment..." });
+
+    try {
+      const reelsForReport: InstagramReelForReport[] = postsToDisplay.map(p => ({
+        id: p.id,
+        reelUrl: p.reelUrl,
+        caption: p.caption || '',
+        username: p.username || '',
+        likes: p.likes || 0,
+        comments: p.comments || 0,
+        playCount: p.playCount || 0,
+        reshareCount: p.reshareCount || 0,
+        postedAt: p.postedAt || new Date(0).toISOString(),
+      }));
+
+      let filterContextString = "Reels shown: " + (postsToDisplay.length === allFetchedPosts.length ? "All" : "Filtered list");
+      if (dateRange.from || dateRange.to) {
+        filterContextString += `. Filtered by date: ${dateRange.from ? format(dateRange.from, 'MMM d, yyyy') : 'Any'} - ${dateRange.to ? format(dateRange.to, 'MMM d, yyyy') : 'Any'}`;
+      }
+      filterContextString += `. Sorted by ${sortConfig.key} (${sortConfig.order}).`;
+
+      const reportOutput: InstagramAnalyticsReportOutput = await generateInstagramAnalyticsReport({ 
+        reels: reelsForReport, 
+        filterContext: filterContextString 
+      });
+
+      if (!reportOutput) {
+        throw new Error("AI model did not return a report for Instagram.");
+      }
+      
+      const pptx = new PptxGenJS();
+      pptx.layout = "LAYOUT_WIDE";
+      const primaryColor = "3F51B5"; 
+      const accentColor = "E91E63"; 
+      const textColor = "212121";
+      const slideBackgroundColor = "FFFFFF";
+
+      pptx.defineSlideMaster({
+        title: "INSTA_MASTER_SLIDE",
+        background: { color: slideBackgroundColor },
+        objects: [
+          { rect: { x: 0, y: 0, w: "100%", h: 0.75, fill: { color: primaryColor } } },
+          { text: { text: "Insight Stream - Instagram Analytics", options: { x: 0.5, y: 0.15, w: 6, h: 0.5, color: "FFFFFF", fontSize: 18 } } },
+        ],
+      });
+      
+      const addContentSlide = (slideTitle: string, content?: PptxGenJS.TextProps[] | string) => {
+        const slide = pptx.addSlide({ masterName: "INSTA_MASTER_SLIDE" });
+        slide.addText(slideTitle, { x: 0.5, y: 1.0, w: "90%", h: 0.5, fontSize: 28, bold: true, color: primaryColor });
+        if (content && Array.isArray(content) && content.length > 0) {
+           slide.addText(content, { x: 0.5, y: 1.75, w: "90%", h: 4.5, fontSize: 12, color: textColor, bullet: {type: 'bullet'} });
+        } else if (typeof content === 'string') {
+           slide.addText(content, { x: 0.5, y: 1.75, w: "90%", h: 4.5, fontSize: 12, color: textColor });
+        }
+        return slide;
+      };
+
+      const titleSlide = pptx.addSlide({ masterName: "INSTA_MASTER_SLIDE" });
+      titleSlide.addText(reportOutput.reportTitle || "Instagram Reel Analytics Report", { x: 0.5, y: 2.5, w: '90%', h: 1.5, fontSize: 44, bold: true, color: primaryColor, align: 'center' });
+      titleSlide.addText(`Generated on: ${new Date().toLocaleDateString()}`, { x: 0.5, y: 4.0, w: '90%', h: 0.5, fontSize: 16, color: textColor, align: 'center' });
+
+      addContentSlide("Overall Performance Summary", [{text: reportOutput.overallPerformanceSummary, options: {fontSize: 16}}]);
+      if (reportOutput.keyObservations && reportOutput.keyObservations.length > 0) addContentSlide("Key Observations", reportOutput.keyObservations.map(obs => ({ text: obs, options: { breakLine: true, fontSize: 14 } })));
+      
+      if (reportOutput.topPerformingReels && reportOutput.topPerformingReels.length > 0) {
+        const topReelsSlide = pptx.addSlide({ masterName: "INSTA_MASTER_SLIDE" });
+        topReelsSlide.addText("Top Performing Reels", { x: 0.5, y: 1.0, w: "90%", h: 0.5, fontSize: 28, bold: true, color: primaryColor });
+        let yPos = 1.75;
+        reportOutput.topPerformingReels.forEach((reel, index) => {
+          const reelTitle = reel.caption ? (reel.caption.length > 50 ? reel.caption.substring(0,47)+'...' : reel.caption) : (reel.username ? `@${reel.username}'s Reel` : `Reel ID: ${reel.id}`);
+          topReelsSlide.addText(`${index + 1}. ${reelTitle}`, { x: 0.5, y: yPos, w: "90%", h: 0.3, fontSize: 16, bold: true, color: accentColor, hyperlink: { url: reel.reelUrl || '#', tooltip: "View Reel" } }); yPos += 0.35;
+          topReelsSlide.addText(`Plays: ${reel.playCount.toLocaleString()} | Likes: ${reel.likes.toLocaleString()} | Comments: ${reel.comments.toLocaleString()} | Reshares: ${(reel.reshareCount || 0).toLocaleString()}`, { x: 0.7, y: yPos, w: "85%", h: 0.25, fontSize: 12, color: textColor }); yPos += 0.25;
+          if (reel.reason) { topReelsSlide.addText(`Reason: ${reel.reason}`, { x: 0.7, y: yPos, w: "85%", h: 0.25, fontSize: 12, italic: true, color: textColor }); yPos += 0.25; }
+          yPos += 0.2;
+        });
+      }
+      if (reportOutput.areasForImprovement && reportOutput.areasForImprovement.length > 0) addContentSlide("Areas for Improvement", reportOutput.areasForImprovement.map(area => ({ text: area, options: { breakLine: true, fontSize: 14 } })));
+      if (reportOutput.actionableSuggestions && reportOutput.actionableSuggestions.length > 0) addContentSlide("Actionable Suggestions", reportOutput.actionableSuggestions.map(suggestion => ({ text: suggestion, options: { breakLine: true, fontSize: 14 } })));
+
+      const endSlide = pptx.addSlide({ masterName: "INSTA_MASTER_SLIDE" });
+      endSlide.addText("Thank You", { x:0.5, y:2.5, w:'90%', h:1, fontSize:40, bold:true, color:primaryColor, align:'center'});
+      endSlide.addText("Report generated by Insight Stream", { x:0.5, y:3.5, w:'90%', h:0.5, fontSize:14, color:textColor, align:'center'});
+
+      const reportTitleForFile = reportOutput.reportTitle ? reportOutput.reportTitle.replace(/[^a-z0-9_]/gi, '_').toLowerCase() : 'instagram_reels_report';
+      pptx.writeFile({ fileName: `${reportTitleForFile}.pptx` });
+      toast({ title: "PPT Report Downloaded", description: "Instagram Reels PPT report generated successfully." });
+
+    } catch (err: any) {
+      console.error("Error generating or downloading Instagram PPT report:", err);
+      toast({ title: "PPT Report Generation Failed", description: err.message || "Could not generate the PPT report for Instagram.", variant: "destructive" });
+    } finally {
+      setIsGeneratingPptReport(false);
+    }
   };
 
   return (
@@ -522,7 +636,7 @@ export default function InstagramAnalyticsPage() {
                 <CardContent>
                     <Button 
                         onClick={handleRefreshFeed} 
-                        disabled={isRefreshing || isLoadingPosts || !currentTargetUserId}
+                        disabled={isRefreshing || isLoadingPosts || !currentTargetUserId || isGeneratingPptReport}
                         variant="outline"
                         size="sm"
                         className="w-full sm:w-auto"
@@ -572,15 +686,35 @@ export default function InstagramAnalyticsPage() {
                 }
               </CardDescription>
             </div>
-            <Button 
-                onClick={handleDownloadInstagramReportCsv} 
-                disabled={postsToDisplay.length === 0} 
-                variant="outline"
-                size="sm"
-              >
-                <FileSpreadsheet className="mr-2 h-4 w-4" />
-                Download Report (CSV)
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  disabled={postsToDisplay.length === 0 || isGeneratingPptReport || isRefreshing}
+                >
+                  {(isGeneratingPptReport) && <ReportLoaderIcon className="mr-2 h-4 w-4 animate-spin" />}
+                  Download Report
+                  <ChevronDown className="ml-2 h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem 
+                  onClick={handleDownloadInstagramReportCsv}
+                  disabled={isGeneratingPptReport || isRefreshing}
+                >
+                  <CsvIcon className="mr-2 h-4 w-4" />
+                  Export as CSV
+                </DropdownMenuItem>
+                <DropdownMenuItem 
+                  onClick={handleDownloadInstagramReportPpt}
+                  disabled={isGeneratingPptReport || isRefreshing}
+                >
+                  <PptIcon className="mr-2 h-4 w-4" />
+                  Export as PPT (AI Analysis)
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </CardHeader>
           <CardContent>
             {(isLoadingPosts && !isRefreshing) ? (<div className="flex justify-center items-center py-10"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div>) 
