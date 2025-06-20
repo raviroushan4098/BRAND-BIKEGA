@@ -15,7 +15,7 @@ import {z}from 'genkit';
 
 // Schema for individual YouTube video data (consistent with other flows)
 // This type is exported for use in ContentSuggestionForm
-export const YouTubeVideoDataSchema = z.object({
+const YouTubeVideoDataSchema = z.object({
   title: z.string(),
   likes: z.number(),
   comments: z.number(),
@@ -26,7 +26,7 @@ export type YouTubeVideoData = z.infer<typeof YouTubeVideoDataSchema>;
 
 // Schema for individual Instagram post data (consistent with other flows)
 // This type is exported for use in ContentSuggestionForm
-export const InstagramPostDataSchema = z.object({
+const InstagramPostDataSchema = z.object({
   thumbnail: z.string().describe("URL or placeholder for the thumbnail image."),
   likes: z.number(),
   comments: z.number(),
@@ -119,3 +119,4 @@ const generalQueryFlow = ai.defineFlow(
     return output;
   }
 );
+
