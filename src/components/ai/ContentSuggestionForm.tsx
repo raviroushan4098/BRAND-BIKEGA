@@ -8,9 +8,9 @@ import * as z from 'zod';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Loader2, Wand2, MessageSquare, Send, UserCircle, Bot } from 'lucide-react';
-import { generalQuery, type GeneralQueryInput, type GeneralQueryOutput } from '@/ai/flows/general-query-flow';
+import { Alert, AlertDescription } from "@/components/ui/alert"; // Removed AlertTitle as it's not used
+import { Loader2, MessageSquare, Send, UserCircle, Bot } from 'lucide-react';
+import { generalQuery, type GeneralQueryInput } from '@/ai/flows/general-query-flow'; // Removed GeneralQueryOutput as it's not directly typed here
 import { mockYouTubeData, mockInstagramData } from '@/lib/mockData'; 
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/hooks/use-toast';
@@ -28,12 +28,19 @@ interface ChatMessage {
   timestamp: Date;
 }
 
+const applyBasicMarkdown = (text: string): string => {
+  if (!text) return '';
+  return text
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Bold: **text**
+    .replace(/\*(.*?)\*/g, '<em>$1</em>');          // Italic: *text*
+};
+
 const ContentSuggestionForm = () => {
   const { user } = useAuth();
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const chatContainerRef = useRef<HTMLDivElement>(null); // Ref for the scrollable CardContent
+  const chatContainerRef = useRef<HTMLDivElement>(null); 
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -43,7 +50,6 @@ const ContentSuggestionForm = () => {
   });
 
   useEffect(() => {
-    // Scroll to bottom when chatHistory updates
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
@@ -111,7 +117,7 @@ const ContentSuggestionForm = () => {
   };
   
   return (
-    <Card className="w-full shadow-xl flex flex-col max-h-[80vh]"> {/* Card is flex container, column, with max height */}
+    <Card className="w-full shadow-xl flex flex-col max-h-[80vh]">
       <CardHeader>
         <div className="flex items-center gap-3">
           <MessageSquare className="h-8 w-8 text-primary" />
@@ -123,14 +129,20 @@ const ContentSuggestionForm = () => {
         </CardDescription>
       </CardHeader>
       
-      {/* CardContent is now the scrollable area with flex-grow and overflow-y-auto */}
       <CardContent className="flex-grow overflow-y-auto p-6" ref={chatContainerRef}> 
-        <div className="space-y-4"> {/* Inner div for message layout */}
+        <div className="space-y-4">
           {chatHistory.map((msg) => (
             <div key={msg.id} className={`flex items-end space-x-2 ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}>
               {msg.type === 'ai' && <Bot className="h-6 w-6 text-primary flex-shrink-0 mb-1" />}
               <div className={`max-w-[70%] p-3 rounded-lg shadow-md ${msg.type === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
-                <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                {msg.type === 'ai' ? (
+                  <div
+                    className="text-sm whitespace-pre-wrap"
+                    dangerouslySetInnerHTML={{ __html: applyBasicMarkdown(msg.content) }}
+                  />
+                ) : (
+                  <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                )}
                 <p className="text-xs opacity-70 mt-1 text-right">
                   {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </p>
@@ -149,7 +161,7 @@ const ContentSuggestionForm = () => {
         </div>
       </CardContent>
 
-      <CardFooter className="border-t p-4 shrink-0"> {/* Footer does not grow or shrink */}
+      <CardFooter className="border-t p-4 shrink-0">
         <form onSubmit={form.handleSubmit(onSubmit)} className="flex w-full items-start gap-2">
           <Textarea
             {...form.register('userQuery')}
