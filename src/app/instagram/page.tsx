@@ -4,7 +4,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import AppLayout from '@/components/layout/AppLayout';
 import InstagramCard from '@/components/analytics/InstagramCard';
-import { mockInstagramData, type InstagramPost } from '@/lib/mockData'; // Keep mock data for now
+import type { StoredInstagramPost } from '@/lib/instagramPostAnalyticsService'; // Updated import
+import {
+  saveInstagramPostAnalytics,
+  getAllInstagramPostAnalyticsForUser,
+  batchSaveInstagramPostAnalytics // Added for potential future use
+} from '@/lib/instagramPostAnalyticsService';
+import { fetchInstagramReelStats, type FetchInstagramReelStatsInput, type InstagramReelStatsOutput } from '@/ai/flows/fetch-instagram-reel-stats-flow';
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -13,27 +20,29 @@ import { Label } from '@/components/ui/label';
 import { useAuth } from '@/hooks/useAuth';
 import type { User } from '@/lib/authService';
 import { getAllUsers as apiGetAllUsers } from '@/lib/authService';
-import { assignInstagramLinksToUser, getInstagramLinksForUser } from '@/lib/instagramLinkService'; // Service uses new collection name
+import { assignInstagramLinksToUser, getInstagramLinksForUser } from '@/lib/instagramLinkService';
 import { toast } from '@/hooks/use-toast';
 import {
   BarChart3, UserPlus, LinkIcon, FileText, UploadCloud, Users, DownloadCloud, Loader2, Instagram as InstagramUIIcon, Eye, Heart, MessageSquare, ListFilter,
-  CalendarIcon, ArrowUpDown, XCircle, FilterX, RefreshCw
+  CalendarIcon, ArrowUpDown, XCircle, FilterX, RefreshCw, PlayCircle
 } from 'lucide-react';
 import { Skeleton } from "@/components/ui/skeleton";
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Progress } from '@/components/ui/progress';
-import { format, isValid as isValidDate } from 'date-fns';
+import { format, isValid as isValidDate, parseISO } from 'date-fns';
 
 interface SummaryStats {
   totalPosts: number;
   totalLikes: number;
   totalComments: number;
+  totalPlays: number; // Changed from views to plays
   averageLikesPerPost: number;
   averageCommentsPerPost: number;
+  averagePlaysPerPost: number; // Added
 }
 
-type SortablePostKey = 'timestamp' | 'likes' | 'comments';
+type SortablePostKey = 'postedAt' | 'likes' | 'comments' | 'playCount'; // Updated for StoredInstagramPost
 
 export default function InstagramAnalyticsPage() {
   const { user } = useAuth();
@@ -47,15 +56,14 @@ export default function InstagramAnalyticsPage() {
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
   const [isAssigning, setIsAssigning] = useState(false);
 
-  // Using mockInstagramData as the initial source for allFetchedPosts for now
-  const [allFetchedPosts, setAllFetchedPosts] = useState<InstagramPost[]>(mockInstagramData);
-  const [postsToDisplay, setPostsToDisplay] = useState<InstagramPost[]>(mockInstagramData);
-  const [isLoadingPosts, setIsLoadingPosts] = useState(false); // Initially false, true when fetching
+  const [allFetchedPosts, setAllFetchedPosts] = useState<StoredInstagramPost[]>([]);
+  const [postsToDisplay, setPostsToDisplay] = useState<StoredInstagramPost[]>([]);
+  const [isLoadingPosts, setIsLoadingPosts] = useState(false); 
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [summaryStats, setSummaryStats] = useState<SummaryStats | null>(null);
 
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({ from: undefined, to: undefined });
-  const [sortConfig, setSortConfig] = useState<{ key: SortablePostKey; order: 'asc' | 'desc' }>({ key: 'timestamp', order: 'desc' });
+  const [sortConfig, setSortConfig] = useState<{ key: SortablePostKey; order: 'asc' | 'desc' }>({ key: 'postedAt', order: 'desc' });
 
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshProgress, setRefreshProgress] = useState(0);
@@ -79,30 +87,33 @@ export default function InstagramAnalyticsPage() {
 
   const loadInitialUserPosts = useCallback(async (userIdToFetch: string) => {
     if (!userIdToFetch) {
-      setAllFetchedPosts(mockInstagramData);
+      setAllFetchedPosts([]);
       setFetchError(null);
       setIsLoadingPosts(false);
       return;
     }
     setIsLoadingPosts(true);
     setFetchError(null);
-    setAllFetchedPosts([]); 
-    await new Promise(resolve => setTimeout(resolve, 500)); 
+    try {
+      const storedPosts = await getAllInstagramPostAnalyticsForUser(userIdToFetch);
+      setAllFetchedPosts(storedPosts);
+    } catch (error: any) {
+      console.error("Error loading Instagram posts from Firestore:", error);
+      setFetchError("Could not load post data from storage. Please try refreshing.");
+      setAllFetchedPosts([]);
+      toast({ title: "Storage Error", description: "Failed to load cached post data.", variant: "destructive" });
+    }
     setIsLoadingPosts(false);
   }, []);
 
   useEffect(() => {
     const targetUserId = user?.role === 'admin' && selectedUserIdForAdmin ? selectedUserIdForAdmin : user?.id;
     if (targetUserId) {
-      if (user?.role === 'admin' && selectedUserIdForAdmin) {
-        setAllFetchedPosts([]); 
-      } else {
-        setAllFetchedPosts(mockInstagramData); 
-      }
+      loadInitialUserPosts(targetUserId);
     } else {
-      setAllFetchedPosts(mockInstagramData);
+      setAllFetchedPosts([]);
+      setIsLoadingPosts(false);
     }
-    setIsLoadingPosts(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, selectedUserIdForAdmin]);
 
@@ -111,7 +122,9 @@ export default function InstagramAnalyticsPage() {
     let processedPosts = [...allFetchedPosts];
     if (dateRange.from || dateRange.to) {
       processedPosts = processedPosts.filter(post => {
-        const postDate = new Date(post.timestamp);
+        if (!post.postedAt) return false; // Only filter if postedAt exists
+        const postDate = parseISO(post.postedAt);
+        if (!isValidDate(postDate)) return false;
         if (dateRange.from && postDate < dateRange.from) return false;
         if (dateRange.to) {
             const toDate = new Date(dateRange.to);
@@ -126,8 +139,16 @@ export default function InstagramAnalyticsPage() {
       processedPosts.sort((a, b) => {
         const valA = a[sortConfig.key];
         const valB = b[sortConfig.key];
-        if (sortConfig.key === 'timestamp') {
-          return sortConfig.order === 'asc' ? new Date(valA).getTime() - new Date(valB).getTime() : new Date(valB).getTime() - new Date(valA).getTime();
+
+        if (valA === undefined || valA === null) return sortConfig.order === 'asc' ? -1 : 1;
+        if (valB === undefined || valB === null) return sortConfig.order === 'asc' ? 1 : -1;
+
+        if (sortConfig.key === 'postedAt') {
+          const dateA = parseISO(valA as string).getTime();
+          const dateB = parseISO(valB as string).getTime();
+          if (isNaN(dateA)) return sortConfig.order === 'asc' ? -1 : 1;
+          if (isNaN(dateB)) return sortConfig.order === 'asc' ? 1 : -1;
+          return sortConfig.order === 'asc' ? dateA - dateB : dateB - dateA;
         } else { 
           return sortConfig.order === 'asc' ? (valA as number) - (valB as number) : (valB as number) - (valA as number);
         }
@@ -138,14 +159,17 @@ export default function InstagramAnalyticsPage() {
 
   useEffect(() => {
     if (postsToDisplay.length > 0) {
-      const totalLikes = postsToDisplay.reduce((sum, post) => sum + post.likes, 0);
-      const totalComments = postsToDisplay.reduce((sum, post) => sum + post.comments, 0);
+      const totalLikes = postsToDisplay.reduce((sum, post) => sum + (post.likes || 0), 0);
+      const totalComments = postsToDisplay.reduce((sum, post) => sum + (post.comments || 0), 0);
+      const totalPlays = postsToDisplay.reduce((sum, post) => sum + (post.playCount || 0), 0);
       setSummaryStats({
         totalPosts: postsToDisplay.length,
         totalLikes,
         totalComments,
+        totalPlays,
         averageLikesPerPost: parseFloat((totalLikes / postsToDisplay.length).toFixed(1)) || 0,
         averageCommentsPerPost: parseFloat((totalComments / postsToDisplay.length).toFixed(1)) || 0,
+        averagePlaysPerPost: parseFloat((totalPlays / postsToDisplay.length).toFixed(1)) || 0,
       });
     } else {
       setSummaryStats(null);
@@ -162,26 +186,74 @@ export default function InstagramAnalyticsPage() {
     setIsRefreshing(true);
     setRefreshProgress(0);
     setFetchError(null);
+    let updatedCount = 0;
+    let errorCount = 0;
 
     try {
       const links = await getInstagramLinksForUser(targetUserId);
       if (links.length === 0) {
         setAllFetchedPosts([]); 
-        toast({ title: "No Reel Links", description: "No Instagram Reel links assigned.", variant: "default" });
+        toast({ title: "No Reel Links", description: "No Instagram Reel links assigned to this user.", variant: "default" });
         setIsRefreshing(false);
         return;
       }
       
-      toast({ title: "Refresh Started (Simulated)", description: `Simulating fetch for ${links.length} Instagram Reel link(s).` });
+      toast({ title: "Refresh Started", description: `Fetching stats for ${links.length} Instagram Reel link(s). This may take a while due to delays between requests.` });
+
       for (let i = 0; i < links.length; i++) {
-        await new Promise(resolve => setTimeout(resolve, 300)); 
+        const reelUrl = links[i];
+        try {
+          const flowInput: FetchInstagramReelStatsInput = { reelUrl };
+          const statsOutput: InstagramReelStatsOutput = await fetchInstagramReelStats(flowInput);
+
+          if (statsOutput.fetchedSuccessfully && statsOutput.shortcode) {
+            const postToStore: StoredInstagramPost = {
+              id: statsOutput.shortcode, // shortcode is the ID
+              reelUrl: statsOutput.originalUrl,
+              likes: statsOutput.likeCount || 0,
+              comments: statsOutput.commentCount || 0,
+              playCount: statsOutput.playCount || 0,
+              caption: statsOutput.caption,
+              thumbnailUrl: statsOutput.thumbnailUrl,
+              username: statsOutput.username,
+              postedAt: statsOutput.postedAt,
+              lastFetched: new Date().toISOString(),
+            };
+            await saveInstagramPostAnalytics(targetUserId, postToStore);
+            updatedCount++;
+          } else {
+            console.warn(`Failed to fetch stats for ${reelUrl}: ${statsOutput.errorMessage}`);
+            // Optionally save an entry with the error message
+            if (statsOutput.shortcode) {
+                 await saveInstagramPostAnalytics(targetUserId, {
+                    id: statsOutput.shortcode,
+                    reelUrl: reelUrl,
+                    likes:0, comments:0, playCount:0,
+                    lastFetched: new Date().toISOString(),
+                    errorMessage: statsOutput.errorMessage || "Failed to fetch details."
+                 });
+            }
+            errorCount++;
+          }
+        } catch (flowError: any) {
+          console.error(`Error processing link ${reelUrl}:`, flowError);
+          errorCount++;
+          // Could also try to save a record with the error here if shortcode extractable before flow error
+        }
+        
         setRefreshProgress(((i + 1) / links.length) * 100);
+        
+        // 2-second delay if not the last link
+        if (i < links.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
       }
-      setAllFetchedPosts(mockInstagramData); 
-      toast({ title: "Feed Refreshed (Simulated)", description: "Instagram feed has been 'updated'." });
+
+      await loadInitialUserPosts(targetUserId); // Reload all posts from Firestore
+      toast({ title: "Feed Refreshed", description: `Updated ${updatedCount} reels. ${errorCount > 0 ? `${errorCount} failed.` : ''}` });
 
     } catch (error: any) {
-      const errorMessage = error.message || "Unknown error during refresh simulation.";
+      const errorMessage = error.message || "Unknown error during refresh.";
       setFetchError("Refresh failed: " + errorMessage);
       toast({ title: "Refresh Error", description: errorMessage, variant: "destructive" });
     } finally {
@@ -196,7 +268,7 @@ export default function InstagramAnalyticsPage() {
     const linkEl = document.createElement("a");
     const url = URL.createObjectURL(blob);
     linkEl.setAttribute("href", url);
-    linkEl.setAttribute("download", "instagram_reel_links_template.csv"); // Updated filename
+    linkEl.setAttribute("download", "instagram_reel_links_template.csv");
     linkEl.style.visibility = 'hidden';
     document.body.appendChild(linkEl);
     linkEl.click();
@@ -264,11 +336,12 @@ export default function InstagramAnalyticsPage() {
     const result = await assignInstagramLinksToUser(selectedUserIdForAdmin, uniqueLinks);
     if (result.success) {
       const targetUser = usersForAdminSelect.find(u => u.id === selectedUserIdForAdmin);
-      toast({ title: "Reel Links Assigned", description: `Assigned ${result.actuallyAddedCount} new Reel link(s) to ${targetUser?.name || 'user'}. Refreshing feed.` });
+      toast({ title: "Reel Links Assigned", description: `Assigned ${result.actuallyAddedCount} new Reel link(s) to ${targetUser?.name || 'user'}. You may need to "Refresh Feed".` });
       setSingleLink(''); setCsvFile(null);
       const fileInput = document.getElementById('instagram-csv-upload') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
-      await loadInitialUserPosts(selectedUserIdForAdmin);
+      // Do not auto-refresh, let admin do it
+      // await loadInitialUserPosts(selectedUserIdForAdmin); 
     } else {
       toast({ title: "Assignment Failed", description: "Could not assign Reel links.", variant: "destructive" });
     }
@@ -279,7 +352,7 @@ export default function InstagramAnalyticsPage() {
   const toggleSortOrder = () => setSortConfig(prev => ({ ...prev, order: prev.order === 'asc' ? 'desc' : 'asc' }));
   const handleClearFilters = () => {
     setDateRange({ from: undefined, to: undefined });
-    setSortConfig({ key: 'timestamp', order: 'desc' });
+    setSortConfig({ key: 'postedAt', order: 'desc' });
   };
 
   const StatCard: React.FC<{icon: React.ElementType, label: string, value: string | number}> = ({ icon: Icon, label, value }) => (
@@ -302,7 +375,7 @@ export default function InstagramAnalyticsPage() {
             <CardDescription>
               {user?.role === 'admin' 
                 ? "Assign Instagram Reel links, view tracked posts, and manage data." 
-                : "Overview of Instagram post performance. Refresh to get latest data (simulated)."
+                : "Overview of Instagram Reel performance. Refresh to get latest data."
               }
             </CardDescription>
              {isRefreshing && (
@@ -372,7 +445,12 @@ export default function InstagramAnalyticsPage() {
               <div className="flex gap-2">
                 <Select value={sortConfig.key} onValueChange={handleSortChange} disabled={isRefreshing}>
                   <SelectTrigger id="sort-by-insta" className="flex-grow"><SelectValue placeholder="Sort field" /></SelectTrigger>
-                  <SelectContent><SelectItem value="timestamp">Date</SelectItem><SelectItem value="likes">Likes</SelectItem><SelectItem value="comments">Comments</SelectItem></SelectContent>
+                  <SelectContent>
+                    <SelectItem value="postedAt">Date</SelectItem>
+                    <SelectItem value="likes">Likes</SelectItem>
+                    <SelectItem value="comments">Comments</SelectItem>
+                    <SelectItem value="playCount">Plays</SelectItem>
+                  </SelectContent>
                 </Select>
                 <Button variant="outline" size="icon" onClick={toggleSortOrder} title={`Sort ${sortConfig.order === 'asc'?'Desc':'Asc'}`} disabled={isRefreshing}><ArrowUpDown className="h-4 w-4" /></Button>
               </div>
@@ -382,7 +460,7 @@ export default function InstagramAnalyticsPage() {
         </Card>
 
         {(isLoadingPosts && !summaryStats && !isRefreshing) && (
-          <Card className="mb-6"><CardHeader><Skeleton className="h-6 w-2/5 mb-2" /><Skeleton className="h-4 w-1/3" /></CardHeader><CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4"><Skeleton className="h-28 w-full" /><Skeleton className="h-28 w-full" /><Skeleton className="h-28 w-full" /><Skeleton className="h-28 w-full" /></CardContent></Card>
+          <Card className="mb-6"><CardHeader><Skeleton className="h-6 w-2/5 mb-2" /><Skeleton className="h-4 w-1/3" /></CardHeader><CardContent className="grid grid-cols-2 md:grid-cols-5 gap-4"><Skeleton className="h-28 w-full" /><Skeleton className="h-28 w-full" /><Skeleton className="h-28 w-full" /><Skeleton className="h-28 w-full" /><Skeleton className="h-28 w-full" /></CardContent></Card>
         )}
 
         {(!isLoadingPosts || isRefreshing) && summaryStats && (
@@ -391,7 +469,7 @@ export default function InstagramAnalyticsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle className="text-xl font-semibold">Performance Overview</CardTitle>
-                  <CardDescription>Summary for {user?.role === 'admin' && selectedUserIdForAdmin ? `${usersForAdminSelect.find(u=>u.id === selectedUserIdForAdmin)?.name || 'selected user'}'s` : "your"} {summaryStats.totalPosts} post(s) {(dateRange.from||dateRange.to)?"(filtered)":""}.</CardDescription>
+                  <CardDescription>Summary for {user?.role === 'admin' && selectedUserIdForAdmin ? `${usersForAdminSelect.find(u=>u.id === selectedUserIdForAdmin)?.name || 'selected user'}'s` : "your"} {summaryStats.totalPosts} reel(s) {(dateRange.from||dateRange.to)?"(filtered)":""}.</CardDescription>
                 </div>
                 <Button onClick={handleRefreshFeed} disabled={isRefreshing || isLoadingPosts} variant="outline" size="sm">
                   <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin':''}`} /> {isRefreshing ? 'Refreshing...':'Refresh Feed'}
@@ -399,11 +477,11 @@ export default function InstagramAnalyticsPage() {
               </div>
             </CardHeader>
             <CardContent className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-              <StatCard icon={ListFilter} label="Total Posts" value={summaryStats.totalPosts} />
+              <StatCard icon={ListFilter} label="Total Reels" value={summaryStats.totalPosts} />
               <StatCard icon={Heart} label="Total Likes" value={summaryStats.totalLikes} />
               <StatCard icon={MessageSquare} label="Total Comments" value={summaryStats.totalComments} />
-              <StatCard icon={Eye} label="Avg Likes" value={summaryStats.averageLikesPerPost} />
-              <StatCard icon={Eye} label="Avg Comments" value={summaryStats.averageCommentsPerPost} />
+              <StatCard icon={PlayCircle} label="Total Plays" value={summaryStats.totalPlays} /> {/* Changed icon & label */}
+              <StatCard icon={Eye} label="Avg Plays" value={summaryStats.averagePlaysPerPost} /> {/* Changed label */}
             </CardContent>
           </Card>
         )}
@@ -411,14 +489,14 @@ export default function InstagramAnalyticsPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-2xl">
-              {user?.role === 'admin' ? (selectedUserIdForAdmin ? `${usersForAdminSelect.find(u=>u.id === selectedUserIdForAdmin)?.name || 'Selected User'}'s Posts` : 'Select User to View Posts') : "Your Instagram Posts"}
+              {user?.role === 'admin' ? (selectedUserIdForAdmin ? `${usersForAdminSelect.find(u=>u.id === selectedUserIdForAdmin)?.name || 'Selected User'}'s Reels` : 'Select User to View Reels') : "Your Instagram Reels"}
             </CardTitle>
             <CardDescription>
-              {user?.role === 'admin' && !selectedUserIdForAdmin ? 'Select a user above to see their tracked Instagram posts.'
-                : isLoadingPosts && !isRefreshing ? 'Loading post information...' 
+              {user?.role === 'admin' && !selectedUserIdForAdmin ? 'Select a user above to see their tracked Instagram Reels.'
+                : isLoadingPosts && !isRefreshing ? 'Loading Reel information from storage...' 
                 : fetchError ? `Error: ${fetchError}`
-                : postsToDisplay.length > 0 ? `Displaying ${postsToDisplay.length} of ${allFetchedPosts.length} post(s). Sorted by ${sortConfig.key} (${sortConfig.order}). (Current data is mock)`
-                : 'No Instagram posts to display. Assign Reel links or try "Refresh Feed" (simulated).'
+                : postsToDisplay.length > 0 ? `Displaying ${postsToDisplay.length} of ${allFetchedPosts.length} reel(s). Sorted by ${sortConfig.key} (${sortConfig.order}).`
+                : 'No Instagram Reels to display. Assign Reel links or try "Refresh Feed".'
               }
             </CardDescription>
           </CardHeader>
@@ -427,7 +505,7 @@ export default function InstagramAnalyticsPage() {
             : postsToDisplay.length > 0 ? (<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">{postsToDisplay.map((post) => (<InstagramCard key={post.id} post={post} />))}</div>) 
             : (<div className="text-center py-10 text-muted-foreground"><InstagramUIIcon className="h-16 w-16 mx-auto mb-4 opacity-50" />
                 {fetchError && !isLoadingPosts && !isRefreshing && <p className="text-destructive mb-2">{fetchError}</p>}
-                <p>No Instagram posts to display. Try assigning Reel links (admin) or "Refresh Feed" (simulated).</p>
+                <p>No Instagram Reels to display. Try assigning Reel links (admin) or "Refresh Feed".</p>
               </div>
             )}
           </CardContent>
