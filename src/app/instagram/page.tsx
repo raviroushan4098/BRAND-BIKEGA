@@ -13,7 +13,7 @@ import { Label } from '@/components/ui/label';
 import { useAuth } from '@/hooks/useAuth';
 import type { User } from '@/lib/authService';
 import { getAllUsers as apiGetAllUsers } from '@/lib/authService';
-import { assignInstagramLinksToUser, getInstagramLinksForUser } from '@/lib/instagramLinkService'; // New service
+import { assignInstagramLinksToUser, getInstagramLinksForUser } from '@/lib/instagramLinkService'; // Service uses new collection name
 import { toast } from '@/hooks/use-toast';
 import {
   BarChart3, UserPlus, LinkIcon, FileText, UploadCloud, Users, DownloadCloud, Loader2, Instagram as InstagramUIIcon, Eye, Heart, MessageSquare, ListFilter,
@@ -77,10 +77,8 @@ export default function InstagramAnalyticsPage() {
     fetchUsersForAdmin();
   }, [fetchUsersForAdmin]);
 
-  // Placeholder for loading actual user posts - for now, uses mock or clears
   const loadInitialUserPosts = useCallback(async (userIdToFetch: string) => {
     if (!userIdToFetch) {
-      // If no user is selected, display all mock data (or could be empty array)
       setAllFetchedPosts(mockInstagramData);
       setFetchError(null);
       setIsLoadingPosts(false);
@@ -88,36 +86,20 @@ export default function InstagramAnalyticsPage() {
     }
     setIsLoadingPosts(true);
     setFetchError(null);
-    // In a real scenario, you'd fetch posts for userIdToFetch from your Firestore storage here.
-    // For now, simulate no stored data for a selected user to test empty states.
     setAllFetchedPosts([]); 
-    // Simulating a delay for fetching
     await new Promise(resolve => setTimeout(resolve, 500)); 
     setIsLoadingPosts(false);
-    // If you had a service like `getAllInstagramPostsForUser(userIdToFetch)`:
-    // try {
-    //   const storedPosts = await getAllInstagramPostsForUser(userIdToFetch);
-    //   setAllFetchedPosts(storedPosts);
-    // } catch (error) {
-    //   setFetchError("Could not load stored Instagram posts.");
-    //   setAllFetchedPosts([]);
-    // } finally {
-    //  setIsLoadingPosts(false);
-    // }
   }, []);
 
   useEffect(() => {
     const targetUserId = user?.role === 'admin' && selectedUserIdForAdmin ? selectedUserIdForAdmin : user?.id;
     if (targetUserId) {
-      // loadInitialUserPosts(targetUserId); // Will show empty for selected users by default
-      // For demo purposes, let's continue showing mock data for the current user, and empty for selected admin users
       if (user?.role === 'admin' && selectedUserIdForAdmin) {
-        setAllFetchedPosts([]); // Admin viewing specific user: show empty / fetched
+        setAllFetchedPosts([]); 
       } else {
-        setAllFetchedPosts(mockInstagramData); // Non-admin or admin viewing own: show mock
+        setAllFetchedPosts(mockInstagramData); 
       }
     } else {
-       // No user context at all, show all mock data
       setAllFetchedPosts(mockInstagramData);
     }
     setIsLoadingPosts(false);
@@ -133,7 +115,7 @@ export default function InstagramAnalyticsPage() {
         if (dateRange.from && postDate < dateRange.from) return false;
         if (dateRange.to) {
             const toDate = new Date(dateRange.to);
-            toDate.setHours(23, 59, 59, 999); // Include the whole 'to' day
+            toDate.setHours(23, 59, 59, 999); 
             if (postDate > toDate) return false;
         }
         return true;
@@ -146,7 +128,7 @@ export default function InstagramAnalyticsPage() {
         const valB = b[sortConfig.key];
         if (sortConfig.key === 'timestamp') {
           return sortConfig.order === 'asc' ? new Date(valA).getTime() - new Date(valB).getTime() : new Date(valB).getTime() - new Date(valA).getTime();
-        } else { // likes, comments
+        } else { 
           return sortConfig.order === 'asc' ? (valA as number) - (valB as number) : (valB as number) - (valA as number);
         }
       });
@@ -185,22 +167,16 @@ export default function InstagramAnalyticsPage() {
       const links = await getInstagramLinksForUser(targetUserId);
       if (links.length === 0) {
         setAllFetchedPosts([]); 
-        toast({ title: "No Links", description: "No Instagram links assigned.", variant: "default" });
+        toast({ title: "No Reel Links", description: "No Instagram Reel links assigned.", variant: "default" });
         setIsRefreshing(false);
         return;
       }
       
-      // Placeholder: Simulate fetching and saving for each link
-      // In a real app, you'd call your Instagram API fetching flow here for each link/profile
-      // then save the results to Firestore using an instagramPostAnalyticsService.
-      toast({ title: "Refresh Started (Simulated)", description: `Simulating fetch for ${links.length} Instagram link(s).` });
+      toast({ title: "Refresh Started (Simulated)", description: `Simulating fetch for ${links.length} Instagram Reel link(s).` });
       for (let i = 0; i < links.length; i++) {
-        // Simulate API call and save
         await new Promise(resolve => setTimeout(resolve, 300)); 
         setRefreshProgress(((i + 1) / links.length) * 100);
       }
-      // After "fetching", you might update `allFetchedPosts` with new data.
-      // For now, we can just reload mock data to show something.
       setAllFetchedPosts(mockInstagramData); 
       toast({ title: "Feed Refreshed (Simulated)", description: "Instagram feed has been 'updated'." });
 
@@ -215,12 +191,12 @@ export default function InstagramAnalyticsPage() {
 
 
   const handleDownloadCsvTemplate = () => {
-    const csvContent = "link\n"; // Instagram links
+    const csvContent = "link\n"; 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const linkEl = document.createElement("a");
     const url = URL.createObjectURL(blob);
     linkEl.setAttribute("href", url);
-    linkEl.setAttribute("download", "instagram_links_template.csv");
+    linkEl.setAttribute("download", "instagram_reel_links_template.csv"); // Updated filename
     linkEl.style.visibility = 'hidden';
     document.body.appendChild(linkEl);
     linkEl.click();
@@ -240,7 +216,7 @@ export default function InstagramAnalyticsPage() {
         if (!text) { resolve([]); return; }
         let lines = text.split(/\r\n|\n|\r/).map(line => line.trim()).filter(Boolean); 
         if (lines.length > 0 && lines[0].trim().toLowerCase() === 'link') lines = lines.slice(1);
-        resolve(lines.map(line => line.split(',')[0].trim()).filter(Boolean)); // Get first column
+        resolve(lines.map(line => line.split(',')[0].trim()).filter(Boolean)); 
       };
       reader.onerror = (error) => reject(error);
       reader.readAsText(file);
@@ -253,7 +229,7 @@ export default function InstagramAnalyticsPage() {
       return;
     }
     if (!singleLink && !csvFile) {
-      toast({ title: "No Links Provided", description: "Enter a link or upload CSV.", variant: "destructive" });
+      toast({ title: "No Reel Links Provided", description: "Enter a Reel link or upload CSV.", variant: "destructive" });
       return;
     }
     setIsAssigning(true);
@@ -261,7 +237,7 @@ export default function InstagramAnalyticsPage() {
     if (singleLink.trim()) {
       if (isValidHttpUrl(singleLink.trim())) linksFromInput.push(singleLink.trim());
       else {
-        toast({ title: "Invalid URL", description: "Single link is not a valid URL.", variant: "destructive" });
+        toast({ title: "Invalid URL", description: "Single Reel link is not a valid URL.", variant: "destructive" });
         setIsAssigning(false); return;
       }
     }
@@ -281,23 +257,20 @@ export default function InstagramAnalyticsPage() {
     
     const uniqueLinks = Array.from(new Set(linksFromInput));
     if (uniqueLinks.length === 0) {
-      toast({ title: "No Valid Links", description: "No valid Instagram links found.", variant: "destructive" });
+      toast({ title: "No Valid Reel Links", description: "No valid Instagram Reel links found.", variant: "destructive" });
       setIsAssigning(false); return;
     }
 
     const result = await assignInstagramLinksToUser(selectedUserIdForAdmin, uniqueLinks);
     if (result.success) {
       const targetUser = usersForAdminSelect.find(u => u.id === selectedUserIdForAdmin);
-      toast({ title: "Links Assigned", description: `Assigned ${result.actuallyAddedCount} new link(s) to ${targetUser?.name || 'user'}. Refreshing feed.` });
+      toast({ title: "Reel Links Assigned", description: `Assigned ${result.actuallyAddedCount} new Reel link(s) to ${targetUser?.name || 'user'}. Refreshing feed.` });
       setSingleLink(''); setCsvFile(null);
       const fileInput = document.getElementById('instagram-csv-upload') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
-      // Placeholder: Trigger a simulated refresh for the selected user.
-      // In a real scenario, this might set `allFetchedPosts` to empty and let `handleRefreshFeed` populate it.
-      await loadInitialUserPosts(selectedUserIdForAdmin); // To clear current view for this user
-      // handleRefreshFeed(); // Optionally auto-trigger refresh
+      await loadInitialUserPosts(selectedUserIdForAdmin);
     } else {
-      toast({ title: "Assignment Failed", description: "Could not assign links.", variant: "destructive" });
+      toast({ title: "Assignment Failed", description: "Could not assign Reel links.", variant: "destructive" });
     }
     setIsAssigning(false);
   };
@@ -324,11 +297,11 @@ export default function InstagramAnalyticsPage() {
           <CardHeader>
             <div className="flex items-center gap-3">
               <InstagramUIIcon className="h-8 w-8 text-primary" />
-              <CardTitle className="text-3xl font-bold">Instagram Analytics</CardTitle>
+              <CardTitle className="text-3xl font-bold">Instagram Reel Analytics</CardTitle>
             </div>
             <CardDescription>
               {user?.role === 'admin' 
-                ? "Assign Instagram links, view tracked posts, and manage data." 
+                ? "Assign Instagram Reel links, view tracked posts, and manage data." 
                 : "Overview of Instagram post performance. Refresh to get latest data (simulated)."
               }
             </CardDescription>
@@ -344,8 +317,8 @@ export default function InstagramAnalyticsPage() {
         {user?.role === 'admin' && (
           <Card className="mb-8 shadow-lg">
             <CardHeader>
-              <div className="flex items-center gap-3"><UserPlus className="h-6 w-6 text-accent" /> <CardTitle className="text-2xl font-semibold">Assign Instagram Links</CardTitle></div>
-              <CardDescription>Select a user and provide Instagram links (profiles, reels, etc.) to track.</CardDescription>
+              <div className="flex items-center gap-3"><UserPlus className="h-6 w-6 text-accent" /> <CardTitle className="text-2xl font-semibold">Assign Instagram Reel Links</CardTitle></div>
+              <CardDescription>Select a user and provide Instagram Reel links to track.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div>
@@ -356,8 +329,8 @@ export default function InstagramAnalyticsPage() {
                 </Select>
               </div>
               <div>
-                <Label htmlFor="single-link-instagram" className="flex items-center mb-2"><LinkIcon className="mr-2 h-4 w-4" /> Add Single Instagram Link</Label>
-                <Input id="single-link-instagram" type="url" placeholder="e.g., https://www.instagram.com/username or /reel/..." value={singleLink} onChange={(e) => setSingleLink(e.target.value)} className="w-full md:w-1/2" disabled={isAssigning || isRefreshing} />
+                <Label htmlFor="single-link-instagram" className="flex items-center mb-2"><LinkIcon className="mr-2 h-4 w-4" /> Add Single Instagram Reel Link</Label>
+                <Input id="single-link-instagram" type="url" placeholder="e.g., https://www.instagram.com/reel/..." value={singleLink} onChange={(e) => setSingleLink(e.target.value)} className="w-full md:w-1/2" disabled={isAssigning || isRefreshing} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="instagram-csv-upload" className="flex items-center"><FileText className="mr-2 h-4 w-4" /> Or Upload CSV</Label>
@@ -365,13 +338,13 @@ export default function InstagramAnalyticsPage() {
                   <Input id="instagram-csv-upload" type="file" accept=".csv" onChange={(e) => setCsvFile(e.target.files ? e.target.files[0] : null)} className="w-full md:w-1/2 pt-2" disabled={isAssigning || isRefreshing} />
                   <Button variant="outline" onClick={handleDownloadCsvTemplate} disabled={isAssigning || isRefreshing} className="w-full sm:w-auto"><DownloadCloud className="mr-2 h-4 w-4" /> Template</Button>
                 </div>
-                <p className="text-xs text-muted-foreground">CSV: one Instagram link (profile, reel, etc.) per line, column header "link".</p>
+                <p className="text-xs text-muted-foreground">CSV: one Instagram Reel link per line, column header "link".</p>
               </div>
             </CardContent>
             <CardFooter>
               <Button onClick={handleAssignLinks} disabled={isAssigning || isRefreshing || !selectedUserIdForAdmin || (!singleLink && !csvFile)}>
                 {isAssigning ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <UploadCloud className="mr-2 h-5 w-5" />}
-                {isAssigning ? 'Assigning...' : 'Assign Links'}
+                {isAssigning ? 'Assigning...' : 'Assign Reel Links'}
               </Button>
             </CardFooter>
           </Card>
@@ -445,7 +418,7 @@ export default function InstagramAnalyticsPage() {
                 : isLoadingPosts && !isRefreshing ? 'Loading post information...' 
                 : fetchError ? `Error: ${fetchError}`
                 : postsToDisplay.length > 0 ? `Displaying ${postsToDisplay.length} of ${allFetchedPosts.length} post(s). Sorted by ${sortConfig.key} (${sortConfig.order}). (Current data is mock)`
-                : 'No Instagram posts to display. Assign links or try "Refresh Feed" (simulated).'
+                : 'No Instagram posts to display. Assign Reel links or try "Refresh Feed" (simulated).'
               }
             </CardDescription>
           </CardHeader>
@@ -454,7 +427,7 @@ export default function InstagramAnalyticsPage() {
             : postsToDisplay.length > 0 ? (<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">{postsToDisplay.map((post) => (<InstagramCard key={post.id} post={post} />))}</div>) 
             : (<div className="text-center py-10 text-muted-foreground"><InstagramUIIcon className="h-16 w-16 mx-auto mb-4 opacity-50" />
                 {fetchError && !isLoadingPosts && !isRefreshing && <p className="text-destructive mb-2">{fetchError}</p>}
-                <p>No Instagram posts to display. Try assigning links (admin) or "Refresh Feed" (simulated).</p>
+                <p>No Instagram posts to display. Try assigning Reel links (admin) or "Refresh Feed" (simulated).</p>
               </div>
             )}
           </CardContent>
@@ -463,3 +436,4 @@ export default function InstagramAnalyticsPage() {
     </AppLayout>
   );
 }
+

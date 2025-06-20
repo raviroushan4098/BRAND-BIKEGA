@@ -8,10 +8,10 @@ interface AssignLinksResult {
 }
 
 /**
- * Assigns or updates Instagram links for a specific user.
- * Links are stored in an array field named 'links' within a document identified by the userId in the 'instagramProfileLinks' collection.
+ * Assigns or updates Instagram Reel links for a specific user.
+ * Links are stored in an array field named 'links' within a document identified by the userId in the 'instagramReelLinks' collection.
  * @param userId The ID of the user.
- * @param linksToAdd An array of new Instagram links (profiles, reels, etc.) to add.
+ * @param linksToAdd An array of new Instagram Reel links to add.
  * @returns An object indicating success and the count of links actually added.
  */
 export const assignInstagramLinksToUser = async (userId: string, linksToAdd: string[]): Promise<AssignLinksResult> => {
@@ -21,7 +21,7 @@ export const assignInstagramLinksToUser = async (userId: string, linksToAdd: str
   }
 
   try {
-    const userLinksRef = doc(db, 'instagramProfileLinks', userId); // Using 'instagramProfileLinks' collection
+    const userLinksRef = doc(db, 'instagramReelLinks', userId); // Changed collection name
     const docSnap = await getDoc(userLinksRef);
 
     let existingLinks: string[] = [];
@@ -36,22 +36,22 @@ export const assignInstagramLinksToUser = async (userId: string, linksToAdd: str
     await setDoc(userLinksRef, { links: updatedLinks });
     return { success: true, actuallyAddedCount };
   } catch (error) {
-    console.error("Error assigning Instagram links to user:", error);
+    console.error("Error assigning Instagram Reel links to user:", error);
     return { success: false, actuallyAddedCount: 0 };
   }
 };
 
 /**
- * Retrieves the list of Instagram links for a specific user.
+ * Retrieves the list of Instagram Reel links for a specific user.
  * @param userId The ID of the user.
- * @returns An array of Instagram links, or an empty array if none are found or an error occurs.
+ * @returns An array of Instagram Reel links, or an empty array if none are found or an error occurs.
  */
 export const getInstagramLinksForUser = async (userId: string): Promise<string[]> => {
   if (!userId) {
     return [];
   }
   try {
-    const userLinksRef = doc(db, 'instagramProfileLinks', userId);
+    const userLinksRef = doc(db, 'instagramReelLinks', userId); // Changed collection name
     const docSnap = await getDoc(userLinksRef);
 
     if (docSnap.exists() && docSnap.data()?.links) {
@@ -62,3 +62,4 @@ export const getInstagramLinksForUser = async (userId: string): Promise<string[]
     return [];
   }
 };
+
