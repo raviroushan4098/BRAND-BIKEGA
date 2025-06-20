@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -34,6 +34,7 @@ const ContentSuggestionForm = () => {
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -41,6 +42,17 @@ const ContentSuggestionForm = () => {
       userQuery: '',
     },
   });
+
+  useEffect(() => {
+    // Scroll to bottom when chatHistory updates
+    if (scrollAreaRef.current) {
+      const viewport = scrollAreaRef.current.querySelector('div[data-radix-scroll-area-viewport]');
+      if (viewport) {
+        viewport.scrollTop = viewport.scrollHeight;
+      }
+    }
+  }, [chatHistory]);
+
 
   const onSubmit: SubmitHandler<FormValues> = async (data) => {
     setIsLoading(true);
@@ -53,10 +65,8 @@ const ContentSuggestionForm = () => {
       timestamp: new Date(),
     };
     setChatHistory(prev => [...prev, userMessage]);
-    form.reset(); // Clear the input field
+    form.reset(); 
 
-    // Prepare data for the AI flow
-    // Map mock data to the expected schema for the new flow
     const youtubeDataContext = mockYouTubeData.map(v => ({ 
         title: v.title, 
         likes: v.likes, 
@@ -87,7 +97,6 @@ const ContentSuggestionForm = () => {
         timestamp: new Date(),
       };
       setChatHistory(prev => [...prev, aiMessage]);
-      // toast({ title: "AI Responded!", description: "InsightStreamBot has answered your query." });
     } catch (err) {
       console.error("Error getting AI response:", err);
       const errorMessage = err instanceof Error ? err.message : "Failed to get response from AI. Please try again.";
@@ -118,13 +127,13 @@ const ContentSuggestionForm = () => {
         </CardDescription>
       </CardHeader>
       
-      <CardContent className="flex-grow overflow-hidden flex flex-col p-0">
-        <ScrollArea className="flex-grow p-6">
+      <CardContent className="flex-grow flex flex-col overflow-hidden p-0">
+        <ScrollArea className="h-full w-full p-6" ref={scrollAreaRef}>
           <div className="space-y-4">
             {chatHistory.map((msg) => (
               <div key={msg.id} className={`flex items-end space-x-2 ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}>
                 {msg.type === 'ai' && <Bot className="h-6 w-6 text-primary flex-shrink-0 mb-1" />}
-                <div className={`max-w-[70%] p-3 rounded-lg ${msg.type === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
+                <div className={`max-w-[70%] p-3 rounded-lg shadow-md ${msg.type === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
                   <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
                   <p className="text-xs opacity-70 mt-1 text-right">
                     {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -136,7 +145,7 @@ const ContentSuggestionForm = () => {
             {isLoading && chatHistory[chatHistory.length-1]?.type === 'user' && (
               <div className="flex items-end space-x-2 justify-start">
                 <Bot className="h-6 w-6 text-primary flex-shrink-0 mb-1" />
-                <div className="max-w-[70%] p-3 rounded-lg bg-muted text-muted-foreground">
+                <div className="max-w-[70%] p-3 rounded-lg bg-muted text-muted-foreground shadow-md">
                   <Loader2 className="h-5 w-5 animate-spin" />
                 </div>
               </div>
@@ -145,7 +154,7 @@ const ContentSuggestionForm = () => {
         </ScrollArea>
       </CardContent>
 
-      <CardFooter className="border-t p-4">
+      <CardFooter className="border-t p-4 shrink-0">
         <form onSubmit={form.handleSubmit(onSubmit)} className="flex w-full items-start gap-2">
           <Textarea
             {...form.register('userQuery')}
@@ -181,3 +190,4 @@ const ContentSuggestionForm = () => {
 };
 
 export default ContentSuggestionForm;
+
