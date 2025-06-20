@@ -34,17 +34,20 @@ interface ChatMessage {
 
 const applyBasicMarkdown = (text: string): string => {
   if (!text) return '';
-  return text
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') 
-    .replace(/\*(.*?)\*/g, '<em>$1</em>');          
+  // Bold: **text** -> <strong>text</strong>
+  let processedText = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  // Italic: *text* -> <em>text</em> (ensure not to conflict with bold)
+  processedText = processedText.replace(/(?<!\*)\*(?!\*)(.*?)(?<!\*)\*(?!\*)/g, '<em>$1</em>');
+  return processedText;
 };
+
 
 const ContentSuggestionForm = () => {
   const { user } = useAuth();
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const chatContainerRef = useRef<HTMLDivElement>(null); 
+  const chatContainerRef = useRef<HTMLDivElement>(null);
 
   const [messagesRemaining, setMessagesRemaining] = useState<number | null>(null);
   const [dailyLimit, setDailyLimit] = useState<number>(10);
@@ -55,6 +58,12 @@ const ContentSuggestionForm = () => {
   const [isContextLoading, setIsContextLoading] = useState(false);
   const [contextError, setContextError] = useState<string | null>(null);
 
+  const form = useForm<FormValues>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      userQuery: "",
+    },
+  });
 
   useEffect(() => {
     if (chatContainerRef.current) {
@@ -69,7 +78,7 @@ const ContentSuggestionForm = () => {
           const status = await getChatUsageStatus({ userId: user.id });
           if (status.error) {
             console.warn("Could not fetch initial chat usage:", status.error);
-            setMessagesRemaining(10); 
+            setMessagesRemaining(10);
             setDailyLimit(10);
           } else {
             setMessagesRemaining(status.messagesRemaining);
@@ -86,7 +95,7 @@ const ContentSuggestionForm = () => {
           setDailyLimit(10);
         }
       } else {
-        setMessagesRemaining(null); 
+        setMessagesRemaining(null);
         setDailyLimit(10);
         setChatLimitError(null);
       }
@@ -123,17 +132,25 @@ const ContentSuggestionForm = () => {
     fetchContextData();
   }, [user]);
 
-
   const onSubmit: SubmitHandler<FormValues> = async (data) => {
     if (!user || !user.id) {
       setError("User not authenticated. Please log in.");
       toast({ title: "Authentication Error", description: "Please log in to use the AI chat.", variant: "destructive" });
       return;
     }
-    
+
     setChatLimitError(null);
     setIsLoading(true);
     setError(null);
+
+    const userMessage: ChatMessage = {
+      id: `user-${Date.now()}`,
+      type: 'user',
+      content: data.userQuery,
+      timestamp: new Date(),
+    };
+    setChatHistory(prev => [...prev, userMessage]);
+    form.reset(); // Reset form after capturing user's message
 
     try {
       const usageInput: CheckChatUsageInput = { userId: user.id };
@@ -143,20 +160,11 @@ const ContentSuggestionForm = () => {
       setDailyLimit(usageResult.dailyLimit);
 
       if (usageResult.error) {
-          setError(`Usage check error: ${usageResult.error}`);
-          toast({ title: "Chat Usage Error", description: usageResult.error, variant: "destructive" });
-          setIsLoading(false);
-          return;
+        setError(`Usage check error: ${usageResult.error}`);
+        toast({ title: "Chat Usage Error", description: usageResult.error, variant: "destructive" });
+        setIsLoading(false);
+        return;
       }
-
-      const userMessage: ChatMessage = {
-        id: `user-${Date.now()}`,
-        type: 'user',
-        content: data.userQuery,
-        timestamp: new Date(),
-      };
-      setChatHistory(prev => [...prev, userMessage]);
-      form.reset();
 
       if (!usageResult.allowed || usageResult.limitReached) {
         const limitMsg = `You have reached your daily limit of ${usageResult.dailyLimit} messages. Please try again tomorrow. Messages remaining: ${usageResult.messagesRemaining}.`;
@@ -176,18 +184,18 @@ const ContentSuggestionForm = () => {
       return;
     }
 
-    const youtubeContextForAI: YouTubeVideoData[] = userYouTubeData.map(v => ({ 
-        title: v.title || 'Untitled Video', 
-        likes: v.likes || 0, 
-        comments: v.comments || 0, 
-        views: v.views || 0 
+    const youtubeContextForAI: YouTubeVideoData[] = userYouTubeData.map(v => ({
+      title: v.title || 'Untitled Video',
+      likes: v.likes || 0,
+      comments: v.comments || 0,
+      views: v.views || 0
     }));
-    const instagramContextForAI: InstagramPostData[] = userInstagramData.map(p => ({ 
-        thumbnail: p.thumbnailUrl || '', // Flow expects thumbnail, though caption is more useful
-        likes: p.likes || 0, 
-        comments: p.comments || 0, 
-        timestamp: p.postedAt || new Date(0).toISOString(),
-        caption: p.caption || 'Instagram Post (no caption)' 
+    const instagramContextForAI: InstagramPostData[] = userInstagramData.map(p => ({
+      thumbnail: p.thumbnailUrl || '',
+      likes: p.likes || 0,
+      comments: p.comments || 0,
+      timestamp: p.postedAt || new Date(0).toISOString(),
+      caption: p.caption || 'Instagram Post (no caption)'
     }));
 
     const aiInput: GeneralQueryInput = {
@@ -222,38 +230,38 @@ const ContentSuggestionForm = () => {
       setIsLoading(false);
     }
   };
-  
+
   return (
     <Card className="w-full shadow-xl flex flex-col max-h-[80vh]">
       <CardHeader>
         <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <MessageSquare className="h-8 w-8 text-primary" />
-              <CardTitle className="text-3xl font-bold">Ask InsightStream AI</CardTitle>
+          <div className="flex items-center gap-3">
+            <MessageSquare className="h-8 w-8 text-primary" />
+            <CardTitle className="text-3xl font-bold">Ask InsightStream AI</CardTitle>
+          </div>
+          {user && messagesRemaining !== null && (
+            <div className="text-sm text-muted-foreground">
+              Messages Today: {dailyLimit - messagesRemaining} / {dailyLimit}
             </div>
-            {user && messagesRemaining !== null && (
-                <div className="text-sm text-muted-foreground">
-                    Messages Today: {dailyLimit - messagesRemaining} / {dailyLimit}
-                </div>
-            )}
+          )}
         </div>
         <CardDescription>
-          Have questions about your social media strategy or content? Ask our AI assistant! 
+          Have questions about your social media strategy or content? Ask our AI assistant!
           {isContextLoading && " Loading your analytics data for context..."}
           {!isContextLoading && contextError && " Could not load analytics data; using general knowledge."}
           {!isContextLoading && !contextError && (userYouTubeData.length > 0 || userInstagramData.length > 0) && " Your recent YouTube & Instagram data is provided as context."}
           {!isContextLoading && !contextError && userYouTubeData.length === 0 && userInstagramData.length === 0 && " No specific analytics data found to provide as context."}
         </CardDescription>
-         {contextError && !isContextLoading && (
-            <Alert variant="default" className="mt-2 bg-blue-50 border-blue-200 text-blue-700">
-                <Info className="h-4 w-4 text-blue-600" />
-                <AlertTitle>Context Data Note</AlertTitle>
-                <AlertDescription>{contextError}</AlertDescription>
-            </Alert>
+        {contextError && !isContextLoading && (
+          <Alert variant="default" className="mt-2 bg-blue-50 border-blue-200 text-blue-700">
+            <Info className="h-4 w-4 text-blue-600" />
+            <AlertTitle>Context Data Note</AlertTitle>
+            <AlertDescription>{contextError}</AlertDescription>
+          </Alert>
         )}
       </CardHeader>
-      
-      <CardContent className="flex-grow overflow-y-auto p-6" ref={chatContainerRef}> 
+
+      <CardContent className="flex-grow overflow-y-auto p-6" ref={chatContainerRef}>
         <div className="space-y-4">
           {chatHistory.map((msg) => (
             <div key={msg.id} className={`flex items-end space-x-2 ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}>
@@ -274,7 +282,7 @@ const ContentSuggestionForm = () => {
               {msg.type === 'user' && <UserCircle className="h-6 w-6 text-muted-foreground flex-shrink-0 mb-1" />}
             </div>
           ))}
-          {isLoading && chatHistory[chatHistory.length-1]?.type === 'user' && (
+          {isLoading && chatHistory[chatHistory.length - 1]?.type === 'user' && (
             <div className="flex items-end space-x-2 justify-start">
               <Bot className="h-6 w-6 text-primary flex-shrink-0 mb-1" />
               <div className="max-w-[70%] p-3 rounded-lg bg-muted text-muted-foreground shadow-md">
@@ -317,7 +325,7 @@ const ContentSuggestionForm = () => {
             <AlertDescription>{chatLimitError}</AlertDescription>
           </Alert>
         )}
-        {error && !isLoading && !chatLimitError && ( 
+        {error && !isLoading && !chatLimitError && (
           <Alert variant="destructive" className="mt-2 w-full">
             <AlertTriangle className="h-4 w-4" />
             <AlertTitle>Error</AlertTitle>
@@ -330,3 +338,5 @@ const ContentSuggestionForm = () => {
 };
 
 export default ContentSuggestionForm;
+
+    
