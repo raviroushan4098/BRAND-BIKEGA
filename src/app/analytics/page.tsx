@@ -34,24 +34,39 @@ interface InstagramSummaryStats {
   totalReshares: number;
 }
 
-const StatDisplayCard: React.FC<{ title: string; value: string | number; icon: React.ElementType; description?: string; platformColor?: string }> = ({ title, value, icon: Icon, description, platformColor }) => (
-  <Card className="shadow-md hover:shadow-lg transition-shadow">
-    <CardHeader className="pb-2">
-      <div className="flex items-center justify-between">
-        <CardTitle className="text-lg font-semibold">{title}</CardTitle>
-        <Icon className={`h-6 w-6 ${platformColor || 'text-primary'}`} />
-      </div>
-      {description && <CardDescription className="text-xs">{description}</CardDescription>}
-    </CardHeader>
-    <CardContent>
-      <p className="text-3xl font-bold">{typeof value === 'number' ? value.toLocaleString() : value}</p>
-    </CardContent>
-  </Card>
-);
+interface StatDisplayCardProps {
+  title: string;
+  value: string | number;
+  icon: React.ElementType;
+  description?: string;
+  platformColor?: string;
+  size?: 'default' | 'compact';
+}
+
+const StatDisplayCard: React.FC<StatDisplayCardProps> = ({ title, value, icon: Icon, description, platformColor, size = 'default' }) => {
+  const titleSizeClass = size === 'compact' ? 'text-base' : 'text-lg';
+  const valueSizeClass = size === 'compact' ? 'text-2xl' : 'text-3xl';
+  const iconSizeClass = size === 'compact' ? 'h-5 w-5' : 'h-6 w-6';
+
+  return (
+    <Card className="shadow-md hover:shadow-lg transition-shadow">
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between">
+          <CardTitle className={`${titleSizeClass} font-semibold`}>{title}</CardTitle>
+          <Icon className={`${iconSizeClass} ${platformColor || 'text-primary'}`} />
+        </div>
+        {description && <CardDescription className="text-xs">{description}</CardDescription>}
+      </CardHeader>
+      <CardContent>
+        <p className={`${valueSizeClass} font-bold`}>{typeof value === 'number' ? value.toLocaleString() : value}</p>
+      </CardContent>
+    </Card>
+  );
+};
 
 
 export default function OverallAnalyticsPage() {
-  const { user, isLoading: isAuthLoading } = useAuth(); // Get user and auth loading state
+  const { user, isLoading: isAuthLoading } = useAuth(); 
 
   const [youtubeVideos, setYoutubeVideos] = useState<StoredYouTubeVideo[]>([]);
   const [instagramPosts, setInstagramPosts] = useState<StoredInstagramPost[]>([]);
@@ -60,11 +75,11 @@ export default function OverallAnalyticsPage() {
   const [youtubeSummary, setYoutubeSummary] = useState<YouTubeSummaryStats | null>(null);
   const [instagramSummary, setInstagramSummary] = useState<InstagramSummaryStats | null>(null);
 
-  const [isLoading, setIsLoading] = useState(true); // Page's own data loading state
+  const [isLoading, setIsLoading] = useState(true); 
   const [error, setError] = useState<string | null>(null);
 
   const fetchData = useCallback(async (userId: string) => {
-    setIsLoading(true); // Set page's loading to true
+    setIsLoading(true); 
     setError(null);
     try {
       const [ytData, igData] = await Promise.all([
@@ -78,7 +93,7 @@ export default function OverallAnalyticsPage() {
       setError("Failed to load analytics data. Please try again later.");
       toast({ title: "Error", description: "Could not load analytics data.", variant: "destructive" });
     } finally {
-      setIsLoading(false); // Set page's loading to false
+      setIsLoading(false); 
     }
   }, [toast]);
 
@@ -86,17 +101,13 @@ export default function OverallAnalyticsPage() {
     if (user?.id) {
       fetchData(user.id);
     } else if (!isAuthLoading && !user) {
-      // Auth process is complete, and there is no user.
-      setIsLoading(false); // Set page's loading to false.
+      setIsLoading(false); 
       setError("Please log in to view analytics.");
     }
-    // If isAuthLoading is true, and no user yet, page's `isLoading` (initially true) remains true,
-    // showing loader until auth resolves.
   }, [user, isAuthLoading, fetchData]);
 
   useEffect(() => {
     if (youtubeVideos.length > 0 || instagramPosts.length > 0) {
-      // Calculate YouTube Summary
       const ytViews = youtubeVideos.reduce((sum, v) => sum + (v.views || 0), 0);
       const ytLikes = youtubeVideos.reduce((sum, v) => sum + (v.likes || 0), 0);
       const ytComments = youtubeVideos.reduce((sum, v) => sum + (v.comments || 0), 0);
@@ -107,7 +118,6 @@ export default function OverallAnalyticsPage() {
         totalComments: ytComments,
       });
 
-      // Calculate Instagram Summary
       const igPlays = instagramPosts.reduce((sum, p) => sum + (p.playCount || 0), 0);
       const igLikes = instagramPosts.reduce((sum, p) => sum + (p.likes || 0), 0);
       const igComments = instagramPosts.reduce((sum, p) => sum + (p.comments || 0), 0);
@@ -120,7 +130,6 @@ export default function OverallAnalyticsPage() {
         totalReshares: igReshares,
       });
 
-      // Calculate Combined Stats
       setCombinedStats({
         totalContentPieces: youtubeVideos.length + instagramPosts.length,
         totalCombinedLikes: ytLikes + igLikes,
@@ -134,7 +143,7 @@ export default function OverallAnalyticsPage() {
     }
   }, [youtubeVideos, instagramPosts]);
 
-  if (isLoading) { // This is the page's isLoading state
+  if (isLoading) { 
     return (
       <AppLayout>
         <div className="flex flex-col items-center justify-center min-h-[calc(100vh-8rem)]">
@@ -145,7 +154,7 @@ export default function OverallAnalyticsPage() {
     );
   }
 
-  if (error) { // This is the page's error state
+  if (error) { 
     return (
       <AppLayout>
         <div className="flex flex-col items-center justify-center min-h-[calc(100vh-8rem)] text-center">
@@ -157,11 +166,6 @@ export default function OverallAnalyticsPage() {
     );
   }
   
-  // If isLoading is false and error is null, but user is still null,
-  // it means auth hasn't finished yet, or some other unexpected state.
-  // However, the useEffect logic should ensure error is set if auth is done and no user.
-  // The initial isLoading=true covers the auth loading phase.
-
   return (
     <AppLayout>
       <div className="container mx-auto py-8 px-4 md:px-6">
@@ -208,10 +212,10 @@ export default function OverallAnalyticsPage() {
                 <CardDescription>{youtubeSummary.totalVideos} video(s) analyzed.</CardDescription>
               </CardHeader>
               <CardContent className="grid grid-cols-2 gap-4">
-                <StatDisplayCard title="Total Videos" value={youtubeSummary.totalVideos} icon={Youtube} platformColor="text-red-500" />
-                <StatDisplayCard title="Total Views" value={youtubeSummary.totalViews} icon={Eye} platformColor="text-red-500" />
-                <StatDisplayCard title="Total Likes" value={youtubeSummary.totalLikes} icon={ThumbsUp} platformColor="text-red-500" />
-                <StatDisplayCard title="Total Comments" value={youtubeSummary.totalComments} icon={MessageSquare} platformColor="text-red-500" />
+                <StatDisplayCard title="Total Videos" value={youtubeSummary.totalVideos} icon={Youtube} platformColor="text-red-500" size="compact" />
+                <StatDisplayCard title="Total Views" value={youtubeSummary.totalViews} icon={Eye} platformColor="text-red-500" size="compact" />
+                <StatDisplayCard title="Total Likes" value={youtubeSummary.totalLikes} icon={ThumbsUp} platformColor="text-red-500" size="compact" />
+                <StatDisplayCard title="Total Comments" value={youtubeSummary.totalComments} icon={MessageSquare} platformColor="text-red-500" size="compact" />
               </CardContent>
             </Card>
           )}
@@ -226,10 +230,10 @@ export default function OverallAnalyticsPage() {
                 <CardDescription>{instagramSummary.totalReels} reel(s) analyzed.</CardDescription>
               </CardHeader>
               <CardContent className="grid grid-cols-2 gap-4">
-                 <StatDisplayCard title="Total Reels" value={instagramSummary.totalReels} icon={InstagramIcon} platformColor="text-pink-500" />
-                <StatDisplayCard title="Total Plays" value={instagramSummary.totalPlays} icon={PlayCircle} platformColor="text-pink-500" />
-                <StatDisplayCard title="Total Likes" value={instagramSummary.totalLikes} icon={ThumbsUp} platformColor="text-pink-500" />
-                <StatDisplayCard title="Total Comments" value={instagramSummary.totalComments} icon={MessageSquare} platformColor="text-pink-500" />
+                 <StatDisplayCard title="Total Reels" value={instagramSummary.totalReels} icon={InstagramIcon} platformColor="text-pink-500" size="compact" />
+                <StatDisplayCard title="Total Plays" value={instagramSummary.totalPlays} icon={PlayCircle} platformColor="text-pink-500" size="compact" />
+                <StatDisplayCard title="Total Likes" value={instagramSummary.totalLikes} icon={ThumbsUp} platformColor="text-pink-500" size="compact" />
+                <StatDisplayCard title="Total Comments" value={instagramSummary.totalComments} icon={MessageSquare} platformColor="text-pink-500" size="compact" />
               </CardContent>
             </Card>
           )}
@@ -238,4 +242,3 @@ export default function OverallAnalyticsPage() {
     </AppLayout>
   );
 }
-
