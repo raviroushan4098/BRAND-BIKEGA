@@ -78,7 +78,7 @@ const ContentSuggestionForm = () => {
           const status = await getChatUsageStatus({ userId: user.id });
           if (status.error) {
             console.warn("Could not fetch initial chat usage:", status.error);
-            setMessagesRemaining(10);
+            setMessagesRemaining(10); // Default to max if status check fails
             setDailyLimit(10);
           } else {
             setMessagesRemaining(status.messagesRemaining);
@@ -91,7 +91,7 @@ const ContentSuggestionForm = () => {
           }
         } catch (e) {
           console.warn("Error fetching initial chat usage:", e);
-          setMessagesRemaining(10);
+          setMessagesRemaining(10); // Default on error
           setDailyLimit(10);
         }
       } else {
@@ -105,30 +105,42 @@ const ContentSuggestionForm = () => {
 
   useEffect(() => {
     const fetchContextData = async () => {
-      if (user?.id) {
-        setIsContextLoading(true);
-        setContextError(null);
-        try {
-          const [ytData, igData] = await Promise.all([
-            getAllVideoAnalyticsForUser(user.id),
-            getAllInstagramPostAnalyticsForUser(user.id)
-          ]);
-          setUserYouTubeData(ytData);
-          setUserInstagramData(igData);
-        } catch (err) {
-          console.error("Error fetching context data for AI chat:", err);
-          setContextError("Could not load your latest analytics data for AI context. Using general knowledge.");
-          setUserYouTubeData([]);
-          setUserInstagramData([]);
-        } finally {
-          setIsContextLoading(false);
-        }
-      } else {
+      if (!user?.id) {
         setUserYouTubeData([]);
         setUserInstagramData([]);
         setIsContextLoading(false);
+        return;
       }
+
+      setIsContextLoading(true);
+      setContextError(null); // Reset error at the start of fetching
+
+      let ytFetchFailed = false;
+      let igFetchFailed = false;
+
+      try {
+        const ytData = await getAllVideoAnalyticsForUser(user.id);
+        setUserYouTubeData(ytData);
+      } catch (err) {
+        console.error("Error fetching YouTube context data for AI chat:", err);
+        ytFetchFailed = true;
+      }
+
+      try {
+        const igData = await getAllInstagramPostAnalyticsForUser(user.id);
+        setUserInstagramData(igData);
+      } catch (err) {
+        console.error("Error fetching Instagram context data for AI chat:", err);
+        igFetchFailed = true;
+      }
+
+      if (ytFetchFailed || igFetchFailed) {
+        setContextError("Could not load your latest analytics data for AI context. Using general knowledge.");
+      }
+      
+      setIsContextLoading(false);
     };
+
     fetchContextData();
   }, [user]);
 
@@ -150,7 +162,7 @@ const ContentSuggestionForm = () => {
       timestamp: new Date(),
     };
     setChatHistory(prev => [...prev, userMessage]);
-    form.reset(); // Reset form after capturing user's message
+    form.reset(); 
 
     try {
       const usageInput: CheckChatUsageInput = { userId: user.id };
@@ -339,4 +351,3 @@ const ContentSuggestionForm = () => {
 
 export default ContentSuggestionForm;
 
-    
