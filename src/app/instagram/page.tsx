@@ -19,11 +19,11 @@ import { Label } from '@/components/ui/label';
 import { useAuth } from '@/hooks/useAuth';
 import type { User } from '@/lib/authService';
 import { getAllUsers as apiGetAllUsers } from '@/lib/authService';
-import { assignInstagramLinksToUser, getInstagramLinksForUser } from '@/lib/instagramLinkService';
+import { assignInstagramLinksToUser, getInstagramLinksForUser, deleteInstagramLinkForUser } from '@/lib/instagramLinkService';
 import { toast } from '@/hooks/use-toast';
 import {
   BarChart3, UserPlus, LinkIcon, FileText, UploadCloud, Users, DownloadCloud, Loader2, Instagram as InstagramUIIcon, Eye, Heart, MessageSquare, ListFilter,
-  CalendarIcon, ArrowUpDown, XCircle, FilterX, RefreshCw, PlayCircle, Share2, FileSpreadsheet as CsvIcon, FileBarChart2 as PptIcon, ChevronDown, Loader2 as ReportLoaderIcon
+  CalendarIcon, ArrowUpDown, XCircle, FilterX, RefreshCw, PlayCircle, Share2, FileBarChart2 as PptIcon, ChevronDown, Loader2 as ReportLoaderIcon, ListChecks, Trash2, FileSpreadsheet
 } from 'lucide-react';
 import { Skeleton } from "@/components/ui/skeleton";
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -36,6 +36,17 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogDescription, 
+  DialogFooter, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogTrigger,
+  DialogClose
+} from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { 
   generateInstagramAnalyticsReport, 
   type InstagramAnalyticsReportOutput, 
@@ -82,6 +93,12 @@ export default function InstagramAnalyticsPage() {
   const [refreshProgress, setRefreshProgress] = useState(0);
   const [isGeneratingPptReport, setIsGeneratingPptReport] = useState(false);
 
+  // State for View Assigned Links Dialog
+  const [isViewLinksDialogOpen, setIsViewLinksDialogOpen] = useState(false);
+  const [assignedLinksForDialog, setAssignedLinksForDialog] = useState<string[]>([]);
+  const [isLoadingAssignedLinks, setIsLoadingAssignedLinks] = useState(false);
+  const [deletingLinkId, setDeletingLinkId] = useState<string | null>(null);
+
 
   const fetchUsersForAdmin = useCallback(async () => {
     if (user?.role === 'admin') {
@@ -100,6 +117,17 @@ export default function InstagramAnalyticsPage() {
     fetchUsersForAdmin();
   }, [fetchUsersForAdmin]);
 
+  const extractShortcodeFromUrlSafe = (url: string): string | null => {
+    try {
+      const urlObj = new URL(url);
+      const regex = /\/(?:p|reel|reels)\/([a-zA-Z0-9_-]+)/;
+      const match = urlObj.pathname.match(regex);
+      return match && match[1] ? match[1] : null;
+    } catch (e) {
+      return null;
+    }
+  };
+  
   const loadInitialUserPosts = useCallback(async (userIdToFetch: string) => {
     if (!userIdToFetch) {
       setAllFetchedPosts([]);
@@ -384,7 +412,7 @@ export default function InstagramAnalyticsPage() {
 
   const currentTargetUserId = user?.role === 'admin' ? selectedUserIdForAdmin : user?.id;
 
-  const handleDownloadInstagramReportCsv = () => {
+  const handleDownloadInstagramReportExcel = () => {
     if (postsToDisplay.length === 0) {
       toast({ title: "No Data", description: "No reels to include in the report.", variant: "default" });
       return;
@@ -395,7 +423,7 @@ export default function InstagramAnalyticsPage() {
       return `"${stringVal.replace(/"/g, '""')}"`;
     };
   
-    const headers = ["Publish Date", "Title", "Like Count", "Comment Count", "Share Count", "Link"];
+    const headers = ["Publish Date", "Title", "Like Count", "Comment Count", "Play Count", "Share Count", "Link"];
     const csvRows = [headers.join(',')];
   
     postsToDisplay.forEach(post => {
@@ -407,6 +435,7 @@ export default function InstagramAnalyticsPage() {
         escapeCsvCell(title),
         post.likes || 0,
         post.comments || 0,
+        post.playCount || 0,
         post.reshareCount || 0,
         escapeCsvCell(post.reelUrl),
       ];
@@ -414,18 +443,18 @@ export default function InstagramAnalyticsPage() {
     });
   
     const csvString = csvRows.join('\n');
-    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob([`\uFEFF${csvString}`], { type: 'text/csv;charset=utf-8;' }); // Added BOM for Excel
     const linkEl = document.createElement("a");
     const url = URL.createObjectURL(blob);
     linkEl.setAttribute("href", url);
-    linkEl.setAttribute("download", "instagram_reels_report.csv");
+    linkEl.setAttribute("download", "instagram_reels_report.xls");
     linkEl.style.visibility = 'hidden';
     document.body.appendChild(linkEl);
     linkEl.click();
     document.body.removeChild(linkEl);
     URL.revokeObjectURL(url);
   
-    toast({ title: "CSV Report Downloaded", description: "Instagram reels report generated successfully." });
+    toast({ title: "Excel File Downloaded", description: "Instagram reels report generated successfully." });
   };
 
   const handleDownloadInstagramReportPpt = async () => {
@@ -510,12 +539,6 @@ export default function InstagramAnalyticsPage() {
         const interReelSpacing = 0.3; 
 
         reportOutput.topPerformingReels.forEach((reel, index) => {
-          if (yPos + titleHeight + statsHeight + (reel.reason ? reasonHeight : 0) + interReelSpacing > 6.5 && index > 0) { // Check if content might overflow, 6.5 is approx usable slide height
-             // This is a simplified overflow check. Ideally, calculate remaining slide height.
-             // For now, we assume a new slide isn't needed for just 3 reels.
-             // If more reels, a more robust pagination logic would be needed.
-          }
-
           const reelTitleText = reel.caption ? (reel.caption.length > 70 ? reel.caption.substring(0, 67) + '...' : reel.caption) : (reel.username ? `@${reel.username}'s Reel` : `Reel ID: ${reel.id}`);
           
           topReelsSlide.addText(`${index + 1}. ${reelTitleText}`, { 
@@ -563,6 +586,40 @@ export default function InstagramAnalyticsPage() {
     }
   };
 
+  const fetchAssignedLinksForDialog = async () => {
+    if (!selectedUserIdForAdmin) return;
+    setIsLoadingAssignedLinks(true);
+    try {
+      const links = await getInstagramLinksForUser(selectedUserIdForAdmin);
+      setAssignedLinksForDialog(links);
+    } catch (error) {
+      toast({ title: "Error", description: "Could not fetch assigned links.", variant: "destructive" });
+      setAssignedLinksForDialog([]);
+    }
+    setIsLoadingAssignedLinks(false);
+  };
+
+  const handleDeleteAssignedLink = async (linkToDelete: string) => {
+    if (!selectedUserIdForAdmin) return;
+    setDeletingLinkId(linkToDelete);
+    const success = await deleteInstagramLinkForUser(selectedUserIdForAdmin, linkToDelete);
+    if (success) {
+      toast({ title: "Link Deleted", description: `Link "${linkToDelete.substring(0, 30)}..." removed.` });
+      await fetchAssignedLinksForDialog(); // Refresh dialog list
+
+      // Remove post from main display if it matches the deleted link
+      const shortcodeToDelete = extractShortcodeFromUrlSafe(linkToDelete);
+      if (shortcodeToDelete) {
+        setAllFetchedPosts(prev => prev.filter(p => p.id !== shortcodeToDelete));
+      }
+      // Optionally trigger a full refresh if needed, or just update local state
+      // await loadInitialUserPosts(selectedUserIdForAdmin); // Could be too broad
+    } else {
+      toast({ title: "Error", description: "Failed to delete link.", variant: "destructive" });
+    }
+    setDeletingLinkId(null);
+  };
+
   return (
     <AppLayout>
       <div className="container mx-auto py-8 px-4 md:px-6">
@@ -598,7 +655,15 @@ export default function InstagramAnalyticsPage() {
             <CardContent className="space-y-6">
               <div>
                 <Label htmlFor="user-select-instagram" className="flex items-center mb-2"><Users className="mr-2 h-4 w-4" /> Select User</Label>
-                <Select value={selectedUserIdForAdmin} onValueChange={setSelectedUserIdForAdmin} disabled={isLoadingUsers || isAssigning || isRefreshing}>
+                <Select 
+                  value={selectedUserIdForAdmin} 
+                  onValueChange={(value) => {
+                    setSelectedUserIdForAdmin(value);
+                    // Clear dialog links if user changes
+                    setAssignedLinksForDialog([]); 
+                  }} 
+                  disabled={isLoadingUsers || isAssigning || isRefreshing}
+                >
                   <SelectTrigger id="user-select-instagram" className="w-full md:w-1/2"><SelectValue placeholder="Select user..." /></SelectTrigger>
                   <SelectContent>{isLoadingUsers ? <SelectItem value="loading" disabled>Loading...</SelectItem> : usersForAdminSelect.length > 0 ? usersForAdminSelect.map(u => (<SelectItem key={u.id} value={u.id}>{u.name} ({u.email})</SelectItem>)) : <SelectItem value="no-users" disabled>No other users</SelectItem>}</SelectContent>
                 </Select>
@@ -616,11 +681,64 @@ export default function InstagramAnalyticsPage() {
                 <p className="text-xs text-muted-foreground">CSV: one Instagram Reel link per line, column header "link".</p>
               </div>
             </CardContent>
-            <CardFooter>
+            <CardFooter className="flex justify-between items-center">
               <Button onClick={handleAssignLinks} disabled={isAssigning || isRefreshing || !selectedUserIdForAdmin || (!singleLink && !csvFile)}>
                 {isAssigning ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <UploadCloud className="mr-2 h-5 w-5" />}
                 {isAssigning ? 'Assigning & Fetching...' : 'Assign Reel Links & Fetch Stats'}
               </Button>
+              <Dialog open={isViewLinksDialogOpen} onOpenChange={(open) => {
+                  setIsViewLinksDialogOpen(open);
+                  if (open && selectedUserIdForAdmin) fetchAssignedLinksForDialog();
+              }}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" disabled={!selectedUserIdForAdmin || isLoadingUsers || isRefreshing || isAssigning}>
+                    <ListChecks className="mr-2 h-5 w-5" /> View Assigned Links
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-lg">
+                  <DialogHeader>
+                    <DialogTitle>Assigned Instagram Reel Links</DialogTitle>
+                    <DialogDescription>
+                      Manage links for {usersForAdminSelect.find(u => u.id === selectedUserIdForAdmin)?.name || 'the selected user'}.
+                      Deleting a link here will remove it from tracking.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <ScrollArea className="h-[300px] my-4 border rounded-md p-2">
+                    {isLoadingAssignedLinks ? (
+                      <div className="flex items-center justify-center h-full">
+                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                      </div>
+                    ) : assignedLinksForDialog.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-4">No links assigned to this user.</p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {assignedLinksForDialog.map((link, index) => (
+                          <li key={index} className="flex items-center justify-between p-2 hover:bg-muted/50 rounded-md text-sm">
+                            <a href={link} target="_blank" rel="noopener noreferrer" className="truncate hover:underline" title={link}>
+                              {link.length > 50 ? `${link.substring(0,47)}...` : link}
+                            </a>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-7 w-7 text-destructive" 
+                              onClick={() => handleDeleteAssignedLink(link)}
+                              disabled={deletingLinkId === link}
+                              aria-label={`Delete link ${link}`}
+                            >
+                              {deletingLinkId === link ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                            </Button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </ScrollArea>
+                  <DialogFooter>
+                    <DialogClose asChild>
+                      <Button type="button" variant="outline">Close</Button>
+                    </DialogClose>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </CardFooter>
           </Card>
         )}
@@ -725,7 +843,7 @@ export default function InstagramAnalyticsPage() {
                 <Button 
                   variant="outline" 
                   size="sm" 
-                  disabled={postsToDisplay.length === 0 || isGeneratingPptReport || isRefreshing}
+                  disabled={postsToDisplay.length === 0 || isGeneratingPptReport || isRefreshing || isLoadingPosts}
                 >
                   {(isGeneratingPptReport) && <ReportLoaderIcon className="mr-2 h-4 w-4 animate-spin" />}
                   Download Report
@@ -734,11 +852,11 @@ export default function InstagramAnalyticsPage() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem 
-                  onClick={handleDownloadInstagramReportCsv}
+                  onClick={handleDownloadInstagramReportExcel}
                   disabled={isGeneratingPptReport || isRefreshing}
                 >
-                  <CsvIcon className="mr-2 h-4 w-4" />
-                  Export as CSV
+                  <FileSpreadsheet className="mr-2 h-4 w-4" />
+                  Export as Excel
                 </DropdownMenuItem>
                 <DropdownMenuItem 
                   onClick={handleDownloadInstagramReportPpt}
