@@ -13,7 +13,12 @@ import { Label } from '@/components/ui/label';
 import { useAuth } from '@/hooks/useAuth';
 import type { User } from '@/lib/authService';
 import { getAllUsers as apiGetAllUsers } from '@/lib/authService';
-import { assignYouTubeLinksToUser, getYouTubeLinksForUser, deleteYouTubeLinkForUser } from '@/lib/youtubeLinkService';
+import { 
+  assignYouTubeLinksToUser, 
+  getYouTubeLinksForUser, 
+  deleteYouTubeLinkForUser,
+  updateYouTubeLastRefreshTimestamp // New import
+} from '@/lib/youtubeLinkService';
 import { fetchYouTubeDetails } from '@/ai/flows/fetch-youtube-details-flow';
 import { generateChannelAnalyticsReport, type ChannelAnalyticsReportOutput, type YouTubeVideoForReport } from '@/ai/flows/generate-channel-analytics-report-flow';
 import {
@@ -30,7 +35,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Progress } from '@/components/ui/progress';
-import { format, isValid as isValidDate } from 'date-fns';
+import { format, isValid as isValidDate, parseISO } from 'date-fns';
 import PptxGenJS from 'pptxgenjs';
 import { 
   Dialog, 
@@ -77,16 +82,38 @@ export default function YouTubeManagementPage() {
 
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshProgress, setRefreshProgress] = useState(0);
-  const [lastRefreshTimestamp, setLastRefreshTimestamp] = useState<Date | null>(null);
+  const [lastRefreshTimestamp, setLastRefreshTimestamp] = useState<string | null>(null); // Stores ISO string
 
   const [isGeneratingChannelReport, setIsGeneratingChannelReport] = useState(false);
 
-  // State for View Assigned Links Dialog
   const [isViewLinksDialogOpen, setIsViewLinksDialogOpen] = useState(false);
   const [assignedLinksForDialog, setAssignedLinksForDialog] = useState<string[]>([]);
   const [isLoadingAssignedLinks, setIsLoadingAssignedLinks] = useState(false);
   const [deletingLinkId, setDeletingLinkId] = useState<string | null>(null);
   const [assignedLinkSearchTerm, setAssignedLinkSearchTerm] = useState('');
+
+  const currentTargetUserId = user?.role === 'admin' ? selectedUserIdForAdmin : user?.id;
+
+  useEffect(() => {
+    const fetchInitialTimestamp = async () => {
+      if (currentTargetUserId) {
+        try {
+          const { lastRefreshedAt } = await getYouTubeLinksForUser(currentTargetUserId);
+          if (lastRefreshedAt && isValidDate(parseISO(lastRefreshedAt))) {
+            setLastRefreshTimestamp(lastRefreshedAt);
+          } else {
+            setLastRefreshTimestamp(null);
+          }
+        } catch (error) {
+          console.error("Error fetching initial last refresh timestamp:", error);
+          setLastRefreshTimestamp(null);
+        }
+      } else {
+        setLastRefreshTimestamp(null);
+      }
+    };
+    fetchInitialTimestamp();
+  }, [currentTargetUserId]);
 
 
   const fetchUsersForAdmin = useCallback(async () => {
@@ -154,23 +181,22 @@ export default function YouTubeManagementPage() {
   }, [toast]);
 
   useEffect(() => {
-    const targetUserId = user?.role === 'admin' && selectedUserIdForAdmin ? selectedUserIdForAdmin : user?.id;
-    if (targetUserId) {
-      loadInitialUserVideos(targetUserId);
+    if (currentTargetUserId) {
+      loadInitialUserVideos(currentTargetUserId);
     } else {
       setAllFetchedVideos([]);
       setFetchError(null);
       setIsLoadingVideos(false); 
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, selectedUserIdForAdmin]);
+  }, [currentTargetUserId, loadInitialUserVideos]);
 
   useEffect(() => {
     let processedVideos = [...allFetchedVideos];
     if (dateRange.from || dateRange.to) {
       processedVideos = processedVideos.filter(video => {
         if (!video.publishedAt) return false;
-        const publishedDate = new Date(video.publishedAt);
+        const publishedDate = parseISO(video.publishedAt); // Use parseISO
+        if (!isValidDate(publishedDate)) return false;
         if (dateRange.from && publishedDate < dateRange.from) return false;
         if (dateRange.to) {
             const toDate = new Date(dateRange.to);
@@ -188,8 +214,10 @@ export default function YouTubeManagementPage() {
         if (valA === undefined || valA === null) return sortConfig.order === 'asc' ? -1 : 1;
         if (valB === undefined || valB === null) return sortConfig.order === 'asc' ? 1 : -1;
         if (sortConfig.key === 'publishedAt') {
-          const dateA = new Date(valA as string).getTime();
-          const dateB = new Date(valB as string).getTime();
+          const dateA = parseISO(valA as string).getTime(); // Use parseISO
+          const dateB = parseISO(valB as string).getTime(); // Use parseISO
+          if (isNaN(dateA)) return sortConfig.order === 'asc' ? -1 : 1; // Handle invalid dates
+          if (isNaN(dateB)) return sortConfig.order === 'asc' ? 1 : -1; // Handle invalid dates
           return sortConfig.order === 'asc' ? dateA - dateB : dateB - dateA;
         } else if (['views', 'likes', 'comments'].includes(sortConfig.key)) {
           return sortConfig.order === 'asc' ? (valA as number) - (valB as number) : (valB as number) - (valA as number);
@@ -223,8 +251,7 @@ export default function YouTubeManagementPage() {
 
 
   const handleRefreshFeed = async () => {
-    const targetUserId = user?.role === 'admin' && selectedUserIdForAdmin ? selectedUserIdForAdmin : user?.id;
-    if (!targetUserId) {
+    if (!currentTargetUserId) {
       toast({ title: "Cannot Refresh", description: "No user context to refresh videos for.", variant: "destructive" });
       return;
     }
@@ -234,7 +261,7 @@ export default function YouTubeManagementPage() {
     setFetchError(null);
 
     try {
-      const links = await getYouTubeLinksForUser(targetUserId);
+      const { links } = await getYouTubeLinksForUser(currentTargetUserId);
       if (links.length === 0) {
         setAllFetchedVideos([]); 
         toast({ title: "No Links", description: "No YouTube links are assigned to this user.", variant: "default" });
@@ -263,14 +290,25 @@ export default function YouTubeManagementPage() {
       for (let i = 0; i < fetchedVideosFromAPI.length; i++) {
         const videoData = fetchedVideosFromAPI[i];
         if (videoData && videoData.id) {
-          await saveVideoAnalytics(targetUserId, videoData);
+          await saveVideoAnalytics(currentTargetUserId, videoData);
           updatedVideosForState.push(videoData);
         }
         setRefreshProgress(((i + 1) / fetchedVideosFromAPI.length) * 100);
       }
 
       setAllFetchedVideos(updatedVideosForState); 
-      setLastRefreshTimestamp(new Date());
+      
+      try {
+        const updateTimestampSuccess = await updateYouTubeLastRefreshTimestamp(currentTargetUserId);
+        if (updateTimestampSuccess) {
+            setLastRefreshTimestamp(new Date().toISOString());
+        } else {
+            console.warn("Failed to update last refresh timestamp in Firestore.");
+        }
+      } catch (timestampError) {
+          console.error("Error updating last refresh timestamp in Firestore:", timestampError);
+      }
+
       toast({ title: "Feed Refreshed", description: `Successfully updated ${updatedVideosForState.length} videos.` });
 
     } catch (error: any) {
@@ -344,6 +382,13 @@ export default function YouTubeManagementPage() {
       setSingleLink(''); setCsvFile(null);
       const fileInput = document.getElementById('csv-upload') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
+      
+      // Update last refresh timestamp after assigning links
+      const updateTimestampSuccess = await updateYouTubeLastRefreshTimestamp(selectedUserIdForAdmin);
+      if (updateTimestampSuccess) {
+          setLastRefreshTimestamp(new Date().toISOString());
+      }
+      
       await handleRefreshFeed(); 
     } else {
       toast({ title: "Assignment Failed", description: "Could not assign links.", variant: "destructive" });
@@ -407,7 +452,9 @@ export default function YouTubeManagementPage() {
 
       let filterContextString = "Videos shown: " + (videosToDisplay.length === allFetchedVideos.length ? "All" : "Filtered list");
       if (dateRange.from || dateRange.to) {
-        filterContextString += `. Filtered by date: ${dateRange.from ? format(dateRange.from, 'MMM d, yyyy') : 'Any'} - ${dateRange.to ? format(dateRange.to, 'MMM d, yyyy') : 'Any'}`;
+        const fromDateStr = dateRange.from ? format(dateRange.from, 'MMM d, yyyy') : 'Any';
+        const toDateStr = dateRange.to ? format(dateRange.to, 'MMM d, yyyy') : 'Any';
+        filterContextString += `. Filtered by date: ${fromDateStr} - ${toDateStr}`;
       }
       filterContextString += `. Sorted by ${sortConfig.key} (${sortConfig.order}).`;
 
@@ -485,7 +532,7 @@ export default function YouTubeManagementPage() {
     if (!selectedUserIdForAdmin) return;
     setIsLoadingAssignedLinks(true);
     try {
-      const links = await getYouTubeLinksForUser(selectedUserIdForAdmin);
+      const { links } = await getYouTubeLinksForUser(selectedUserIdForAdmin);
       setAssignedLinksForDialog(links);
     } catch (error) {
       toast({ title: "Error", description: "Could not fetch assigned YouTube links.", variant: "destructive" });
@@ -529,7 +576,7 @@ export default function YouTubeManagementPage() {
             <CardDescription>
               {user?.role === 'admin' 
                 ? "Assign YouTube links, view tracked videos, and manage data." 
-                : "Overview of your YouTube video performance. Refresh to get latest data."
+                : "Overview of your YouTube video performance."
               }
             </CardDescription>
              {isRefreshing && (
@@ -666,6 +713,41 @@ export default function YouTubeManagementPage() {
             </CardFooter>
           </Card>
         )}
+        
+        {currentTargetUserId && (
+          <Card className="mb-6 shadow-md">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                   <YoutubeIcon className="h-6 w-6 text-red-500" />
+                   <CardTitle className="text-xl font-semibold">YouTube Feed Actions</CardTitle>
+                </div>
+                <div className="flex flex-col items-end">
+                  <Button 
+                    onClick={handleRefreshFeed} 
+                    disabled={isRefreshing || isLoadingVideos || isGeneratingChannelReport || !currentTargetUserId} 
+                    variant="default" 
+                    size="sm"
+                  >
+                    <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                    {isRefreshing ? 'Refreshing...' : 'Refresh Feed'}
+                  </Button>
+                  {lastRefreshTimestamp && (() => {
+                      const dateObj = parseISO(lastRefreshTimestamp);
+                      if (isValidDate(dateObj) && dateObj.getFullYear() > 1970) { // Check if valid and not epoch
+                          return (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                  Last refreshed: {format(dateObj, "MMM d, yyyy, h:mm a")}
+                              </p>
+                          );
+                      }
+                      return null; 
+                  })()}
+                </div>
+              </div>
+            </CardHeader>
+          </Card>
+        )}
 
         <Card className="mb-6 shadow-md">
           <CardHeader> <CardTitle className="text-xl font-semibold">Filter & Sort Videos</CardTitle> </CardHeader>
@@ -713,7 +795,7 @@ export default function YouTubeManagementPage() {
           </Card>
         )}
 
-        {(!isLoadingVideos || isRefreshing) && summaryStats && (
+        {summaryStats && (!isLoadingVideos || isRefreshing) && (
           <Card className="mb-6 shadow-md">
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -723,17 +805,7 @@ export default function YouTubeManagementPage() {
                     Summary for {user?.role === 'admin' && selectedUserIdForAdmin ? `${usersForAdminSelect.find(u=>u.id === selectedUserIdForAdmin)?.name || 'the selected user'}'s` : "your"} {summaryStats.totalVideos} video(s) { (dateRange.from || dateRange.to) ? "(filtered)" : ""}.
                   </CardDescription>
                 </div>
-                <div className="flex flex-col items-end">
-                  <Button onClick={handleRefreshFeed} disabled={isRefreshing || isLoadingVideos || isGeneratingChannelReport} variant="outline" size="sm">
-                    <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-                    {isRefreshing ? 'Refreshing...' : 'Refresh Feed'}
-                  </Button>
-                  {lastRefreshTimestamp && (
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Last refreshed: {format(lastRefreshTimestamp, "MMM d, yyyy, h:mm a")}
-                    </p>
-                  )}
-                </div>
+                {/* Refresh button moved to its own card */}
               </div>
             </CardHeader>
             <CardContent className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-4">
