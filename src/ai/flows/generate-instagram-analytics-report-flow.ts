@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview A Genkit flow to generate an analytics report for a list of Instagram Reels.
@@ -38,7 +39,7 @@ const InstagramAnalyticsReportOutputSchema = z.object({
   topPerformingReels: z.array(
     z.object({
       id: z.string(),
-      reelUrl: z.string().url().optional(),
+      reelUrl: z.string().optional().describe("The URL of the Instagram reel."), // Removed .url() validation here
       caption: z.string().optional(),
       username: z.string().optional(),
       playCount: z.number(),
@@ -111,3 +112,4 @@ const generateInstagramAnalyticsReportFlow = ai.defineFlow(
     };
   }
 );
+
