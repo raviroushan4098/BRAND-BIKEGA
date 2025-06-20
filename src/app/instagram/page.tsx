@@ -23,7 +23,7 @@ import { assignInstagramLinksToUser, getInstagramLinksForUser } from '@/lib/inst
 import { toast } from '@/hooks/use-toast';
 import {
   BarChart3, UserPlus, LinkIcon, FileText, UploadCloud, Users, DownloadCloud, Loader2, Instagram as InstagramUIIcon, Eye, Heart, MessageSquare, ListFilter,
-  CalendarIcon, ArrowUpDown, XCircle, FilterX, RefreshCw, PlayCircle, Share2
+  CalendarIcon, ArrowUpDown, XCircle, FilterX, RefreshCw, PlayCircle, Share2, FileSpreadsheet
 } from 'lucide-react';
 import { Skeleton } from "@/components/ui/skeleton";
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -236,7 +236,7 @@ export default function InstagramAnalyticsPage() {
                     id: statsOutput.shortcode,
                     reelUrl: reelUrl,
                     likes:0, comments:0, playCount:0, reshareCount:0,
-                    postedAt: new Date(0).toISOString(),
+                    postedAt: statsOutput.postedAt || new Date(0).toISOString(), // Ensure postedAt exists
                     lastFetched: new Date().toISOString(),
                     errorMessage: statsOutput.errorMessage || "Failed to fetch details."
                  });
@@ -370,6 +370,51 @@ export default function InstagramAnalyticsPage() {
 
   const currentTargetUserId = user?.role === 'admin' ? selectedUserIdForAdmin : user?.id;
 
+  const handleDownloadInstagramReportCsv = () => {
+    if (postsToDisplay.length === 0) {
+      toast({ title: "No Data", description: "No reels to include in the report.", variant: "default" });
+      return;
+    }
+  
+    const escapeCsvCell = (cellData: any): string => {
+      const stringVal = String(cellData === undefined || cellData === null ? '' : cellData);
+      // Wrap in double quotes, escape existing double quotes by doubling them
+      return `"${stringVal.replace(/"/g, '""')}"`;
+    };
+  
+    const headers = ["Publish Date", "Title", "Like Count", "Comment Count", "Share Count", "Link"];
+    const csvRows = [headers.join(',')];
+  
+    postsToDisplay.forEach(post => {
+      const postedDate = post.postedAt ? (isValidDate(parseISO(post.postedAt)) ? format(parseISO(post.postedAt), 'yyyy-MM-dd HH:mm:ss') : 'N/A') : 'N/A';
+      const title = post.caption || (post.username ? `@${post.username}'s Reel` : `Reel ID: ${post.id}`);
+      
+      const row = [
+        escapeCsvCell(postedDate),
+        escapeCsvCell(title),
+        post.likes || 0,
+        post.comments || 0,
+        post.reshareCount || 0,
+        escapeCsvCell(post.reelUrl),
+      ];
+      csvRows.push(row.join(','));
+    });
+  
+    const csvString = csvRows.join('\n');
+    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+    const linkEl = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    linkEl.setAttribute("href", url);
+    linkEl.setAttribute("download", "instagram_reels_report.csv");
+    linkEl.style.visibility = 'hidden';
+    document.body.appendChild(linkEl);
+    linkEl.click();
+    document.body.removeChild(linkEl);
+    URL.revokeObjectURL(url);
+  
+    toast({ title: "Report Downloaded", description: "Instagram reels report generated successfully." });
+  };
+
   return (
     <AppLayout>
       <div className="container mx-auto py-8 px-4 md:px-6">
@@ -380,7 +425,6 @@ export default function InstagramAnalyticsPage() {
                 <InstagramUIIcon className="h-8 w-8 text-primary" />
                 <CardTitle className="text-3xl font-bold">Instagram Reel Analytics</CardTitle>
               </div>
-              {/* Removed main refresh button from here */}
             </div>
             <CardDescription className="mt-2">
               {user?.role === 'admin' 
@@ -470,6 +514,26 @@ export default function InstagramAnalyticsPage() {
           <CardFooter><Button variant="outline" onClick={handleClearFilters} disabled={isRefreshing}><FilterX className="mr-2 h-4 w-4" /> Clear</Button></CardFooter>
         </Card>
 
+        {(!isLoadingPosts && currentTargetUserId) && (
+             <Card className="mb-6 shadow-md">
+                <CardHeader>
+                    <CardTitle className="text-xl font-semibold">Actions</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <Button 
+                        onClick={handleRefreshFeed} 
+                        disabled={isRefreshing || isLoadingPosts || !currentTargetUserId}
+                        variant="outline"
+                        size="sm"
+                        className="w-full sm:w-auto"
+                    >
+                        <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin':''}`} /> 
+                        {isRefreshing ? 'Refreshing Feed...':'Refresh Feed'}
+                    </Button>
+                </CardContent>
+            </Card>
+        )}
+
         {(isLoadingPosts && !summaryStats && !isRefreshing) && (
           <Card className="mb-6"><CardHeader><Skeleton className="h-6 w-2/5 mb-2" /><Skeleton className="h-4 w-1/3" /></CardHeader><CardContent className="grid grid-cols-2 md:grid-cols-5 gap-4"><Skeleton className="h-28 w-full" /><Skeleton className="h-28 w-full" /><Skeleton className="h-28 w-full" /><Skeleton className="h-28 w-full" /><Skeleton className="h-28 w-full" /></CardContent></Card>
         )}
@@ -481,15 +545,6 @@ export default function InstagramAnalyticsPage() {
                     <CardTitle className="text-xl font-semibold">Performance Overview</CardTitle>
                     <CardDescription>Summary for {user?.role === 'admin' && selectedUserIdForAdmin ? `${usersForAdminSelect.find(u=>u.id === selectedUserIdForAdmin)?.name || 'selected user'}'s` : "your"} {summaryStats.totalPosts} reel(s) {(dateRange.from||dateRange.to)?"(filtered)":""}.</CardDescription>
                 </div>
-                <Button 
-                    onClick={handleRefreshFeed} 
-                    disabled={isRefreshing || isLoadingPosts || !currentTargetUserId}
-                    variant="outline"
-                    size="sm"
-                  >
-                    <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin':''}`} /> 
-                    {isRefreshing ? 'Refreshing...':'Refresh'}
-                </Button>
             </CardHeader>
             <CardContent className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               <StatCard icon={ListFilter} label="Total Reels" value={summaryStats.totalPosts} />
@@ -503,25 +558,36 @@ export default function InstagramAnalyticsPage() {
         )}
         
         <Card>
-          <CardHeader>
-            <CardTitle className="text-2xl">
-              {user?.role === 'admin' ? (selectedUserIdForAdmin ? `${usersForAdminSelect.find(u=>u.id === selectedUserIdForAdmin)?.name || 'Selected User'}'s Reels` : 'Select User to View Reels') : "Your Instagram Reels"}
-            </CardTitle>
-            <CardDescription>
-              {user?.role === 'admin' && !selectedUserIdForAdmin ? 'Select a user above to see their tracked Instagram Reels.'
-                : isLoadingPosts && !isRefreshing ? 'Loading Reel information from storage...' 
-                : fetchError ? `Error: ${fetchError}`
-                : postsToDisplay.length > 0 ? `Displaying ${postsToDisplay.length} of ${allFetchedPosts.length} reel(s). Sorted by ${sortConfig.key} (${sortConfig.order}).`
-                : 'No Instagram Reels to display. Assign Reel links or try "Refresh Feed".'
-              }
-            </CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-2xl">
+                {user?.role === 'admin' ? (selectedUserIdForAdmin ? `${usersForAdminSelect.find(u=>u.id === selectedUserIdForAdmin)?.name || 'Selected User'}'s Reels` : 'Select User to View Reels') : "Your Instagram Reels"}
+              </CardTitle>
+              <CardDescription>
+                {user?.role === 'admin' && !selectedUserIdForAdmin ? 'Select a user above to see their tracked Instagram Reels.'
+                  : isLoadingPosts && !isRefreshing ? 'Loading Reel information from storage...' 
+                  : fetchError ? `Error: ${fetchError}`
+                  : postsToDisplay.length > 0 ? `Displaying ${postsToDisplay.length} of ${allFetchedPosts.length} reel(s). Sorted by ${sortConfig.key} (${sortConfig.order}).`
+                  : 'No Instagram Reels to display. Assign Reel links or try "Refresh Feed".'
+                }
+              </CardDescription>
+            </div>
+            <Button 
+                onClick={handleDownloadInstagramReportCsv} 
+                disabled={postsToDisplay.length === 0} 
+                variant="outline"
+                size="sm"
+              >
+                <FileSpreadsheet className="mr-2 h-4 w-4" />
+                Download Report (CSV)
+            </Button>
           </CardHeader>
           <CardContent>
             {(isLoadingPosts && !isRefreshing) ? (<div className="flex justify-center items-center py-10"><Loader2 className="h-12 w-12 animate-spin text-primary" /></div>) 
             : postsToDisplay.length > 0 ? (<div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">{postsToDisplay.map((post) => (<InstagramCard key={post.id} post={post} />))}</div>) 
             : (<div className="text-center py-10 text-muted-foreground"><InstagramUIIcon className="h-16 w-16 mx-auto mb-4 opacity-50" />
                 {fetchError && !isLoadingPosts && !isRefreshing && <p className="text-destructive mb-2">{fetchError}</p>}
-                <p>No Instagram Reels to display. Try assigning Reel links (admin) or "Refresh Feed".</p>
+                <p>No Instagram Reels to display. Try assigning Reel links (admin) or use the "Refresh Feed" button above.</p>
               </div>
             )}
           </CardContent>
