@@ -133,13 +133,24 @@ const fetchInstagramReelStatsFlow = ai.defineFlow(
       console.log(`[fetchInstagramReelStatsFlow] API response status for ${shortcode}: ${response.status}`);
 
       if (!response.ok) {
-        const errorBody = await response.text();
-        console.error(`[fetchInstagramReelStatsFlow] RapidAPI Error for ${shortcode} (${response.status}): ${errorBody.substring(0, 500)}...`);
+        const errorBodyText = await response.text();
+        let detailedErrorMessage = `API request failed with status ${response.status}. Raw: ${errorBodyText.substring(0, 150)}`;
+        try {
+            const errorJson = JSON.parse(errorBodyText);
+            if (errorJson && errorJson.error) {
+                detailedErrorMessage = `${errorJson.error} (Status ${response.status})`;
+            }
+        } catch (e) {
+            // JSON parsing failed, stick with the raw message with status
+            console.warn(`[fetchInstagramReelStatsFlow] Could not parse error body as JSON for ${shortcode}: ${errorBodyText.substring(0,100)}`);
+        }
+        console.error(`[fetchInstagramReelStatsFlow] RapidAPI Error for ${shortcode} (${response.status}): ${errorBodyText.substring(0, 500)}...`);
+        console.log(`[fetchInstagramReelStatsFlow] Returning error object for shortcode ${shortcode} due to API error.`);
         return {
           shortcode,
           originalUrl: reelUrl,
           fetchedSuccessfully: false,
-          errorMessage: `API request failed with status ${response.status}. Details: ${errorBody.substring(0, 200)}`,
+          errorMessage: detailedErrorMessage,
         };
       }
 
@@ -175,7 +186,7 @@ const fetchInstagramReelStatsFlow = ai.defineFlow(
       if (postData.edge_media_to_caption?.edges?.length > 0 && postData.edge_media_to_caption.edges[0].node?.text) {
         captionText = postData.edge_media_to_caption.edges[0].node.text;
       }
-      console.log(`[fetchInstagramReelStatsFlow] Extracted caption for ${shortcode}:`, captionText);
+      console.log(`[fetchInstagramReelStatsFlow] Extracted caption for ${shortcode}:`, captionText ? captionText.substring(0,50) + "..." : "undefined");
 
       let postedAtISO: string | undefined = undefined;
       if (postData.taken_at_timestamp) {
@@ -187,17 +198,17 @@ const fetchInstagramReelStatsFlow = ai.defineFlow(
       }
       console.log(`[fetchInstagramReelStatsFlow] Extracted postedAt (ISO) for ${shortcode}:`, postedAtISO);
 
-      const commentCount = Number(postData.comment_count ?? postData.edge_media_to_comment?.count) || 0;
-      const likeCount = Number(postData.like_count ?? postData.edge_media_preview_like?.count) || 0;
-      const playCount = Number(postData.play_count ?? postData.video_view_count) || 0;
-      const thumbnailUrl = postData.display_url;
+      const commentCount = Number(postData.comment_count ?? postData.edge_media_to_comment?.count ?? postData.comments_count) || 0;
+      const likeCount = Number(postData.like_count ?? postData.edge_media_preview_like?.count ?? postData.likes_count) || 0;
+      const playCount = Number(postData.play_count ?? postData.video_view_count ?? postData.reels_plays_count) || 0;
+      const thumbnailUrl = postData.display_url ?? postData.thumbnail_url;
       const username = postData.owner?.username;
 
       console.log(`[fetchInstagramReelStatsFlow] Final extracted stats for ${shortcode}:
         - Comment Count: ${commentCount}
         - Like Count: ${likeCount}
         - Play Count: ${playCount}
-        - Thumbnail URL: ${thumbnailUrl}
+        - Thumbnail URL: ${thumbnailUrl ? thumbnailUrl.substring(0,50) + "..." : "undefined"}
         - Username: ${username}`);
       
       return {
