@@ -127,22 +127,22 @@ const DailyPerformanceChart: React.FC<DailyPerformanceChartProps> = ({
               tickFormatter={(value) => format(parseISO(value), "MMM d")}
             />
             <YAxis
+              type="number"
               stroke="hsl(var(--muted-foreground))"
               fontSize={12}
               tickLine={false}
               axisLine={false}
-              domain={[100, 'auto']} // Set Y-axis to start from 100
+              domain={[100, 'auto']}
+              allowDataOverflow={false}
               tickFormatter={(value) => {
                 if (typeof value !== 'number') return String(value);
+                if (value < 1000) return value.toLocaleString(); 
                 if (value >= 1000000) {
                   const num = value / 1000000;
                   return `${num % 1 === 0 ? num.toFixed(0) : num.toFixed(1)}M`;
                 }
-                if (value >= 1000) {
-                  const num = value / 1000;
-                  return `${num % 1 === 0 ? num.toFixed(0) : num.toFixed(1)}K`;
-                }
-                return value.toLocaleString();
+                const num = value / 1000;
+                return `${num % 1 === 0 ? num.toFixed(0) : num.toFixed(1)}K`;
               }}
             />
             <Tooltip content={<CustomTooltip />} cursor={{ fill: 'hsl(var(--accent))', opacity: 0.1 }} />
@@ -168,7 +168,7 @@ const DailyPerformanceChart: React.FC<DailyPerformanceChartProps> = ({
                 strokeWidth={2}
                 dot={{ r: 3, strokeWidth: 1, fill: metric.color }}
                 activeDot={{ r: 5, strokeWidth: 2 }}
-                connectNulls={true} // Connect line over null/undefined data points if any
+                connectNulls={true} 
               />
             ))}
           </LineChart>
@@ -179,4 +179,3 @@ const DailyPerformanceChart: React.FC<DailyPerformanceChartProps> = ({
 };
 
 export default DailyPerformanceChart;
-
