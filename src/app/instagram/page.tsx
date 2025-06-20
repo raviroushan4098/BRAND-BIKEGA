@@ -88,6 +88,7 @@ export default function InstagramAnalyticsPage() {
   const loadInitialUserPosts = useCallback(async (userIdToFetch: string) => {
     if (!userIdToFetch) {
       setAllFetchedPosts([]);
+      setPostsToDisplay([]);
       setFetchError(null);
       setIsLoadingPosts(false);
       return;
@@ -112,10 +113,10 @@ export default function InstagramAnalyticsPage() {
       loadInitialUserPosts(targetUserId);
     } else {
       setAllFetchedPosts([]);
+      setPostsToDisplay([]);
       setFetchError(null); 
       setIsLoadingPosts(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, selectedUserIdForAdmin, loadInitialUserPosts]);
 
 
@@ -194,6 +195,7 @@ export default function InstagramAnalyticsPage() {
       const links = await getInstagramLinksForUser(targetUserId);
       if (links.length === 0) {
         setAllFetchedPosts([]); 
+        setPostsToDisplay([]);
         toast({ title: "No Reel Links", description: "No Instagram Reel links assigned to this user.", variant: "default" });
         setIsRefreshing(false);
         return;
@@ -224,7 +226,7 @@ export default function InstagramAnalyticsPage() {
             updatedCount++;
           } else {
             console.warn(`Failed to fetch stats for ${reelUrl}: ${statsOutput.errorMessage}`);
-            if (statsOutput.shortcode) {
+            if (statsOutput.shortcode) { // Save error state if shortcode was extractable
                  await saveInstagramPostAnalytics(targetUserId, {
                     id: statsOutput.shortcode,
                     reelUrl: reelUrl,
@@ -243,6 +245,7 @@ export default function InstagramAnalyticsPage() {
         
         setRefreshProgress(((i + 1) / links.length) * 100);
         
+        // Implement a 2-second delay between API calls
         if (i < links.length - 1) {
           await new Promise(resolve => setTimeout(resolve, 2000));
         }
@@ -335,10 +338,11 @@ export default function InstagramAnalyticsPage() {
     const result = await assignInstagramLinksToUser(selectedUserIdForAdmin, uniqueLinks);
     if (result.success) {
       const targetUser = usersForAdminSelect.find(u => u.id === selectedUserIdForAdmin);
-      toast({ title: "Reel Links Assigned", description: `Assigned ${result.actuallyAddedCount} new Reel link(s) to ${targetUser?.name || 'user'}. You may need to "Refresh Feed".` });
+      toast({ title: "Reel Links Assigned", description: `Assigned ${result.actuallyAddedCount} new Reel link(s) to ${targetUser?.name || 'user'}. Starting to fetch stats...` });
       setSingleLink(''); setCsvFile(null);
       const fileInput = document.getElementById('instagram-csv-upload') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
+      await handleRefreshFeed(); // Automatically trigger feed refresh
     } else {
       toast({ title: "Assignment Failed", description: "Could not assign Reel links.", variant: "destructive" });
     }
@@ -388,7 +392,7 @@ export default function InstagramAnalyticsPage() {
           <Card className="mb-8 shadow-lg">
             <CardHeader>
               <div className="flex items-center gap-3"><UserPlus className="h-6 w-6 text-accent" /> <CardTitle className="text-2xl font-semibold">Assign Instagram Reel Links</CardTitle></div>
-              <CardDescription>Select a user and provide Instagram Reel links to track.</CardDescription>
+              <CardDescription>Select a user and provide Instagram Reel links to track. Stats will be fetched automatically.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div>
@@ -414,7 +418,7 @@ export default function InstagramAnalyticsPage() {
             <CardFooter>
               <Button onClick={handleAssignLinks} disabled={isAssigning || isRefreshing || !selectedUserIdForAdmin || (!singleLink && !csvFile)}>
                 {isAssigning ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <UploadCloud className="mr-2 h-5 w-5" />}
-                {isAssigning ? 'Assigning...' : 'Assign Reel Links'}
+                {isAssigning ? 'Assigning...' : 'Assign Reel Links & Fetch Stats'}
               </Button>
             </CardFooter>
           </Card>
