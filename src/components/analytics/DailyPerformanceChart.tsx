@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Loader2, AlertTriangle } from 'lucide-react';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, TooltipProps } from 'recharts';
 import { format, parseISO } from 'date-fns';
-import type { DailyChartDataPoint } from '@/app/analytics/page'; // Import the shared type
+import type { DailyChartDataPoint } from '@/app/analytics/page'; 
 import { NameType, ValueType } from 'recharts/types/component/DefaultTooltipContent';
 
 interface MetricConfig {
@@ -19,7 +19,7 @@ interface MetricConfig {
 interface DailyPerformanceChartProps {
   data: DailyChartDataPoint[];
   metrics: MetricConfig[];
-  xAxisDataKey?: string; // Typically "date"
+  xAxisDataKey?: string; 
   title: string;
   platformIcon: React.ElementType;
   isLoading: boolean;
@@ -132,7 +132,10 @@ const DailyPerformanceChart: React.FC<DailyPerformanceChartProps> = ({
               fontSize={12}
               tickLine={false}
               axisLine={false}
-              domain={[0, (dataMax: number) => Math.max(500, dataMax)]}
+              domain={[
+                0, 
+                (dataMax: number) => Math.max(500, dataMax || 0)
+              ]}
               allowDataOverflow={false}
               tickCount={8} 
               tickFormatter={(value) => {
@@ -180,4 +183,3 @@ const DailyPerformanceChart: React.FC<DailyPerformanceChartProps> = ({
 };
 
 export default DailyPerformanceChart;
-
