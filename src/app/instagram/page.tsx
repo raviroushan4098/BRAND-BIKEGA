@@ -501,13 +501,47 @@ export default function InstagramAnalyticsPage() {
       if (reportOutput.topPerformingReels && reportOutput.topPerformingReels.length > 0) {
         const topReelsSlide = pptx.addSlide({ masterName: "INSTA_MASTER_SLIDE" });
         topReelsSlide.addText("Top Performing Reels", { x: 0.5, y: 1.0, w: "90%", h: 0.5, fontSize: 28, bold: true, color: primaryColor });
+        
         let yPos = 1.75;
+        const titleHeight = 0.35; 
+        const statsHeight = 0.25;
+        const reasonHeight = 0.25;
+        const gapAfterElement = 0.1; 
+        const interReelSpacing = 0.3; 
+
         reportOutput.topPerformingReels.forEach((reel, index) => {
-          const reelTitle = reel.caption ? (reel.caption.length > 50 ? reel.caption.substring(0,47)+'...' : reel.caption) : (reel.username ? `@${reel.username}'s Reel` : `Reel ID: ${reel.id}`);
-          topReelsSlide.addText(`${index + 1}. ${reelTitle}`, { x: 0.5, y: yPos, w: "90%", h: 0.3, fontSize: 16, bold: true, color: accentColor, hyperlink: { url: reel.reelUrl || '#', tooltip: "View Reel" } }); yPos += 0.35;
-          topReelsSlide.addText(`Plays: ${reel.playCount.toLocaleString()} | Likes: ${reel.likes.toLocaleString()} | Comments: ${reel.comments.toLocaleString()} | Reshares: ${(reel.reshareCount || 0).toLocaleString()}`, { x: 0.7, y: yPos, w: "85%", h: 0.25, fontSize: 12, color: textColor }); yPos += 0.25;
-          if (reel.reason) { topReelsSlide.addText(`Reason: ${reel.reason}`, { x: 0.7, y: yPos, w: "85%", h: 0.25, fontSize: 12, italic: true, color: textColor }); yPos += 0.25; }
-          yPos += 0.2;
+          if (yPos + titleHeight + statsHeight + (reel.reason ? reasonHeight : 0) + interReelSpacing > 6.5 && index > 0) { // Check if content might overflow, 6.5 is approx usable slide height
+             // This is a simplified overflow check. Ideally, calculate remaining slide height.
+             // For now, we assume a new slide isn't needed for just 3 reels.
+             // If more reels, a more robust pagination logic would be needed.
+          }
+
+          const reelTitleText = reel.caption ? (reel.caption.length > 70 ? reel.caption.substring(0, 67) + '...' : reel.caption) : (reel.username ? `@${reel.username}'s Reel` : `Reel ID: ${reel.id}`);
+          
+          topReelsSlide.addText(`${index + 1}. ${reelTitleText}`, { 
+            x: 0.5, y: yPos, 
+            w: "90%", h: titleHeight, 
+            fontSize: 16, bold: true, color: accentColor, 
+            hyperlink: { url: reel.reelUrl || '#', tooltip: "View Reel" } 
+          });
+          yPos += titleHeight + gapAfterElement;
+      
+          topReelsSlide.addText(
+            `Plays: ${reel.playCount.toLocaleString()} | Likes: ${reel.likes.toLocaleString()} | Comments: ${reel.comments.toLocaleString()} | Reshares: ${(reel.reshareCount || 0).toLocaleString()}`, 
+            { x: 0.7, y: yPos, w: "85%", h: statsHeight, fontSize: 12, color: textColor }
+          );
+          yPos += statsHeight + gapAfterElement;
+      
+          if (reel.reason) {
+            topReelsSlide.addText(`Reason: ${reel.reason}`, { 
+              x: 0.7, y: yPos, 
+              w: "85%", h: reasonHeight, 
+              fontSize: 12, italic: true, color: textColor 
+            });
+            yPos += reasonHeight + gapAfterElement;
+          }
+          
+          yPos += interReelSpacing; 
         });
       }
       if (reportOutput.areasForImprovement && reportOutput.areasForImprovement.length > 0) addContentSlide("Areas for Improvement", reportOutput.areasForImprovement.map(area => ({ text: area, options: { breakLine: true, fontSize: 14 } })));
