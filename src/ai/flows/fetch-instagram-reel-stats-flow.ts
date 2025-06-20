@@ -41,15 +41,19 @@ const FetchInstagramReelStatsInputSchema = z.object({
 });
 export type FetchInstagramReelStatsInput = z.infer<typeof FetchInstagramReelStatsInputSchema>;
 
-// Output Schema
+// Output Schema - Expanded
 const InstagramReelStatsOutputSchema = z.object({
   shortcode: z.string(),
+  originalUrl: z.string().url(),
   commentCount: z.number().optional().default(0),
   likeCount: z.number().optional().default(0),
-  playCount: z.number().optional().default(0), // Assuming 'views' maps to 'playCount'
+  playCount: z.number().optional().default(0),
+  caption: z.string().optional(),
+  thumbnailUrl: z.string().url().optional(),
+  username: z.string().optional(),
+  postedAt: z.string().optional(), // ISO string
   fetchedSuccessfully: z.boolean(),
   errorMessage: z.string().optional(),
-  originalUrl: z.string().url(),
 });
 export type InstagramReelStatsOutput = z.infer<typeof InstagramReelStatsOutputSchema>;
 
@@ -58,15 +62,11 @@ function extractShortcodeFromUrl(url: string): string | null {
   if (!url) return null;
   try {
     const urlObj = new URL(url);
-    const pathSegments = urlObj.pathname.split('/').filter(Boolean); // Filter out empty strings
-
-    const reelKeywords = ['reel', 'reels', 'p'];
-    for (let i = 0; i < pathSegments.length; i++) {
-      if (reelKeywords.includes(pathSegments[i]) && pathSegments[i+1]) {
-        // The shortcode is usually the segment after "reel", "reels", or "p"
-        // And it should not contain query parameters
-        return pathSegments[i+1].split(/[?&]/)[0];
-      }
+    // Regex to find shortcode after /p/, /reel/, or /reels/
+    const regex = /\/(?:p|reel|reels)\/([a-zA-Z0-9_-]+)/;
+    const match = urlObj.pathname.match(regex);
+    if (match && match[1]) {
+      return match[1];
     }
   } catch (e) {
     console.error("Error parsing URL for shortcode:", e);
@@ -93,7 +93,6 @@ const fetchInstagramReelStatsFlow = ai.defineFlow(
         originalUrl: reelUrl,
         fetchedSuccessfully: false,
         errorMessage: 'RapidAPI key for Instagram scraper is not configured.',
-        commentCount: 0, likeCount: 0, playCount: 0,
       };
     }
 
@@ -104,7 +103,6 @@ const fetchInstagramReelStatsFlow = ai.defineFlow(
         originalUrl: reelUrl,
         fetchedSuccessfully: false,
         errorMessage: `Could not extract shortcode from URL: ${reelUrl}`,
-        commentCount: 0, likeCount: 0, playCount: 0,
       };
     }
 
@@ -112,7 +110,7 @@ const fetchInstagramReelStatsFlow = ai.defineFlow(
     const headers = {
       'X-RapidAPI-Key': apiKey,
       'X-RapidAPI-Host': 'instagram-api-fast-reliable-data-scraper.p.rapidapi.com',
-      'Host': 'instagram-api-fast-reliable-data-scraper.p.rapidapi.com' // Explicitly adding Host header as per snippet
+      'Host': 'instagram-api-fast-reliable-data-scraper.p.rapidapi.com' 
     };
 
     try {
@@ -126,16 +124,11 @@ const fetchInstagramReelStatsFlow = ai.defineFlow(
           originalUrl: reelUrl,
           fetchedSuccessfully: false,
           errorMessage: `API request failed with status ${response.status}. Details: ${errorBody.substring(0, 200)}`,
-          commentCount: 0, likeCount: 0, playCount: 0,
         };
       }
 
-      // The API response seems to wrap the actual data in a "data" object
-      // And the main data for the post is in the first element of an array `data[0]`
-      // This structure is based on typical RapidAPI Instagram scraper responses.
-      // Adjust if the actual API response structure is different.
       const responseData = await response.json();
-      const postData = responseData?.data?.[0]; // Access the first post item if data is an array
+      const postData = responseData?.data?.[0]; 
 
       if (!postData) {
          console.error(`Unexpected API response structure for ${shortcode}:`, responseData);
@@ -144,8 +137,21 @@ const fetchInstagramReelStatsFlow = ai.defineFlow(
             originalUrl: reelUrl,
             fetchedSuccessfully: false,
             errorMessage: 'Unexpected API response structure. Post data not found.',
-            commentCount: 0, likeCount: 0, playCount: 0,
-         }
+         };
+      }
+      
+      let captionText: string | undefined = undefined;
+      if (postData.edge_media_to_caption?.edges?.length > 0 && postData.edge_media_to_caption.edges[0].node?.text) {
+        captionText = postData.edge_media_to_caption.edges[0].node.text;
+      }
+
+      let postedAtISO: string | undefined = undefined;
+      if (postData.taken_at_timestamp) {
+        try {
+          postedAtISO = new Date(postData.taken_at_timestamp * 1000).toISOString();
+        } catch (e) {
+          console.warn(`Could not parse timestamp for ${shortcode}: ${postData.taken_at_timestamp}`);
+        }
       }
       
       return {
@@ -153,7 +159,11 @@ const fetchInstagramReelStatsFlow = ai.defineFlow(
         originalUrl: reelUrl,
         commentCount: Number(postData.comment_count) || 0,
         likeCount: Number(postData.like_count) || 0,
-        playCount: Number(postData.play_count) || Number(postData.video_view_count) || 0, // video_view_count is another common field for views
+        playCount: Number(postData.play_count) || Number(postData.video_view_count) || 0,
+        caption: captionText,
+        thumbnailUrl: postData.display_url, // Assuming display_url is the direct thumbnail URL
+        username: postData.owner?.username,
+        postedAt: postedAtISO,
         fetchedSuccessfully: true,
       };
 
@@ -164,8 +174,8 @@ const fetchInstagramReelStatsFlow = ai.defineFlow(
         originalUrl: reelUrl,
         fetchedSuccessfully: false,
         errorMessage: error.message || 'An unknown error occurred while fetching reel stats.',
-        commentCount: 0, likeCount: 0, playCount: 0,
       };
     }
   }
 );
+

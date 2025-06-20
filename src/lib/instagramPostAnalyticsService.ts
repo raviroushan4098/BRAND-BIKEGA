@@ -10,20 +10,21 @@ import {
   getDocs,
   writeBatch,
   query,
-  orderBy // Added orderBy
+  orderBy
 } from 'firebase/firestore';
 
 // Interface for stored Instagram post analytics
 export interface StoredInstagramPost {
   id: string; // Reel shortcode, used as Firestore document ID
   reelUrl: string; // Original URL assigned by admin
-  thumbnailUrl?: string; // Optional, can be a placeholder initially
-  caption?: string; // Optional, can be a placeholder
+  thumbnailUrl?: string; 
+  caption?: string; 
+  username?: string; // Author's username
+  postedAt?: string; // ISO string when the reel was posted
   likes: number;
   comments: number;
-  views: number; // Mapped from playCount
-  timestamp?: string; // ISO string, could be post creation or last fetched
-  lastFetched: string; // ISO string, timestamp of when data was last fetched
+  playCount: number; // Mapped from API's play_count or video_view_count
+  lastFetched: string; // ISO string, timestamp of when data was last fetched from API
   errorMessage?: string; // If fetching stats for this reel failed
 }
 
@@ -42,7 +43,7 @@ export const saveInstagramPostAnalytics = async (userId: string, postData: Store
     const postDocRef = doc(db, 'userInstagramPostAnalytics', userId, 'posts', postData.id);
     const dataToSave: StoredInstagramPost = {
       ...postData,
-      lastFetched: new Date().toISOString(), // Ensure lastFetched is always updated
+      lastFetched: new Date().toISOString(), 
     };
     await setDoc(postDocRef, dataToSave, { merge: true });
   } catch (error) {
@@ -53,6 +54,7 @@ export const saveInstagramPostAnalytics = async (userId: string, postData: Store
 
 /**
  * Retrieves all stored Instagram post analytics data for a specific user from Firestore.
+ * Ordered by 'postedAt' descending by default, if available, otherwise by 'lastFetched'.
  * @param userId The ID of the user.
  * @returns An array of StoredInstagramPost objects.
  */
@@ -63,8 +65,8 @@ export const getAllInstagramPostAnalyticsForUser = async (userId: string): Promi
   }
   try {
     const postsCollectionRef = collection(db, 'userInstagramPostAnalytics', userId, 'posts');
-    // Order by lastFetched descending to get newest first, or another field like 'timestamp' if available
-    const q = query(postsCollectionRef, orderBy('lastFetched', 'desc')); 
+    // Prefer ordering by actual post date, fallback to last fetched date
+    const q = query(postsCollectionRef, orderBy('postedAt', 'desc'), orderBy('lastFetched', 'desc')); 
     
     const querySnapshot = await getDocs(q);
     const posts: StoredInstagramPost[] = [];
@@ -74,7 +76,19 @@ export const getAllInstagramPostAnalyticsForUser = async (userId: string): Promi
     return posts;
   } catch (error) {
     console.error(`Error fetching all Instagram post analytics for user ${userId}:`, error);
-    return [];
+    // Attempt fallback ordering if 'postedAt' composite query fails (e.g. due to missing fields in some docs)
+    try {
+        const fallbackQuery = query(postsCollectionRef, orderBy('lastFetched', 'desc'));
+        const fallbackSnapshot = await getDocs(fallbackQuery);
+        const posts: StoredInstagramPost[] = [];
+        fallbackSnapshot.forEach((docSnap) => {
+          posts.push({ ...docSnap.data(), id: docSnap.id } as StoredInstagramPost);
+        });
+        return posts;
+    } catch (fallbackError) {
+        console.error(`Error fetching all Instagram post analytics for user ${userId} (fallback):`, fallbackError);
+        return [];
+    }
   }
 };
 
@@ -120,7 +134,7 @@ export const batchSaveInstagramPostAnalytics = async (userId: string, postsData:
         const postDocRef = doc(db, 'userInstagramPostAnalytics', userId, 'posts', postData.id);
         const dataToSave: StoredInstagramPost = {
           ...postData,
-          lastFetched: currentTime, // Ensure lastFetched is consistent for the batch
+          lastFetched: currentTime, 
         };
         batch.set(postDocRef, dataToSave, { merge: true });
       }
@@ -131,3 +145,4 @@ export const batchSaveInstagramPostAnalytics = async (userId: string, postsData:
     throw error;
   }
 };
+
