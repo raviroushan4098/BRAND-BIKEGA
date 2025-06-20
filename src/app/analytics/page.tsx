@@ -4,7 +4,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import AppLayout from '@/components/layout/AppLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, BarChart3, Youtube, Instagram as InstagramIcon, AlertTriangle, Package, MessageSquare, ThumbsUp, Eye, PlayCircle, CalendarDays, Filter } from 'lucide-react';
+import { Loader2, BarChart3, Youtube, Instagram as InstagramIcon, AlertTriangle, Package, MessageSquare, ThumbsUp, Eye, PlayCircle, CalendarDays, Filter, Share2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import type { StoredYouTubeVideo } from '@/lib/youtubeVideoAnalyticsService';
 import { getAllVideoAnalyticsForUser } from '@/lib/youtubeVideoAnalyticsService';
@@ -97,8 +97,8 @@ export default function OverallAnalyticsPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [dateRange, setDateRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
-    from: undefined, // Default to undefined
-    to: undefined,  // Default to undefined
+    from: undefined, 
+    to: undefined,  
   });
   const [dailyYouTubeChartData, setDailyYouTubeChartData] = useState<DailyChartDataPoint[]>([]);
   const [dailyInstagramChartData, setDailyInstagramChartData] = useState<DailyChartDataPoint[]>([]);
@@ -115,11 +115,11 @@ export default function OverallAnalyticsPage() {
       ]);
       setYoutubeVideos(ytData);
       setInstagramPosts(igData);
-       // Set default date range after data is fetched
+       
        if (ytData.length > 0 || igData.length > 0) {
         const today = new Date();
         const sevenDaysAgo = new Date(today);
-        sevenDaysAgo.setDate(today.getDate() - 6); // -6 to include today, making it 7 days total
+        sevenDaysAgo.setDate(today.getDate() - 6); 
         setDateRange({ from: startOfDay(sevenDaysAgo), to: endOfDay(today) });
       } else {
         setDateRange({ from: undefined, to: undefined });
@@ -181,49 +181,57 @@ export default function OverallAnalyticsPage() {
 
   // Process data for charts when dateRange, youtubeVideos, or instagramPosts change
   useEffect(() => {
-    if (!dateRange.from || !dateRange.to) {
+    if (!dateRange.from || !dateRange.to || (!youtubeVideos.length && !instagramPosts.length)) {
       setDailyYouTubeChartData([]);
       setDailyInstagramChartData([]);
+      setIsChartDataLoading(false);
       return;
     }
     setIsChartDataLoading(true);
 
     const rangeArray = eachDayOfInterval({ start: dateRange.from, end: dateRange.to });
-    
-    const newDailyYouTubeData = rangeArray.map(day => {
-      const dayStr = format(day, 'yyyy-MM-dd');
-      let views = 0, likes = 0, comments = 0;
-      youtubeVideos.forEach(video => {
-        if (video.publishedAt && isValid(parseISO(video.publishedAt))) {
-          const publishedDate = startOfDay(parseISO(video.publishedAt));
-          if (format(publishedDate, 'yyyy-MM-dd') === dayStr) {
-            views += video.views || 0;
-            likes += video.likes || 0;
-            comments += video.comments || 0;
-          }
-        }
-      });
-      return { date: dayStr, views, likes, comments };
-    });
-    setDailyYouTubeChartData(newDailyYouTubeData);
+    const dailyYouTubeMap = new Map<string, DailyChartDataPoint>();
+    const dailyInstagramMap = new Map<string, DailyChartDataPoint>();
 
-    const newDailyInstagramData = rangeArray.map(day => {
-      const dayStr = format(day, 'yyyy-MM-dd');
-      let plays = 0, likes = 0, comments = 0, reshares = 0;
-      instagramPosts.forEach(post => {
-        if (post.postedAt && isValid(parseISO(post.postedAt))) {
-          const postedDate = startOfDay(parseISO(post.postedAt));
-          if (format(postedDate, 'yyyy-MM-dd') === dayStr) {
-            plays += post.playCount || 0;
-            likes += post.likes || 0;
-            comments += post.comments || 0;
-            reshares += post.reshareCount || 0;
-          }
-        }
-      });
-      return { date: dayStr, plays, likes, comments, reshares };
+    rangeArray.forEach(day => {
+        const dayStr = format(day, 'yyyy-MM-dd');
+        dailyYouTubeMap.set(dayStr, { date: dayStr, views: 0, likes: 0, comments: 0 });
+        dailyInstagramMap.set(dayStr, { date: dayStr, plays: 0, likes: 0, comments: 0, reshares: 0 });
     });
-    setDailyInstagramChartData(newDailyInstagramData);
+
+    youtubeVideos.forEach(video => {
+        if (video.lastFetched && isValid(parseISO(video.lastFetched))) {
+            const fetchedDate = startOfDay(parseISO(video.lastFetched));
+            if (isWithinInterval(fetchedDate, { start: dateRange.from!, end: dateRange.to! })) {
+                 const fetchedDateStr = format(fetchedDate, 'yyyy-MM-dd');
+                 const dayData = dailyYouTubeMap.get(fetchedDateStr);
+                 if (dayData) {
+                    dayData.views = (dayData.views || 0) + (video.views || 0);
+                    dayData.likes = (dayData.likes || 0) + (video.likes || 0);
+                    dayData.comments = (dayData.comments || 0) + (video.comments || 0);
+                 }
+            }
+        }
+    });
+    setDailyYouTubeChartData(Array.from(dailyYouTubeMap.values()).sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
+
+    instagramPosts.forEach(post => {
+        if (post.lastFetched && isValid(parseISO(post.lastFetched))) {
+            const fetchedDate = startOfDay(parseISO(post.lastFetched));
+            if (isWithinInterval(fetchedDate, { start: dateRange.from!, end: dateRange.to! })) {
+                const fetchedDateStr = format(fetchedDate, 'yyyy-MM-dd');
+                const dayData = dailyInstagramMap.get(fetchedDateStr);
+                if (dayData) {
+                    dayData.plays = (dayData.plays || 0) + (post.playCount || 0);
+                    dayData.likes = (dayData.likes || 0) + (post.likes || 0);
+                    dayData.comments = (dayData.comments || 0) + (post.comments || 0);
+                    dayData.reshares = (dayData.reshares || 0) + (post.reshareCount || 0);
+                }
+            }
+        }
+    });
+    setDailyInstagramChartData(Array.from(dailyInstagramMap.values()).sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
+
     setIsChartDataLoading(false);
   }, [dateRange, youtubeVideos, instagramPosts]);
 
@@ -324,7 +332,7 @@ export default function OverallAnalyticsPage() {
           )}
         </div>
 
-        {/* Date Range Picker and Graphs Section */}
+        
         <Card className="mb-8 shadow-lg">
           <CardHeader>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
@@ -357,7 +365,7 @@ export default function OverallAnalyticsPage() {
                   </Popover>
               </div>
             </div>
-            <CardDescription>Select a date range to view daily trends for YouTube and Instagram.</CardDescription>
+            <CardDescription>Select a date range to view daily trends for YouTube and Instagram based on when stats were last refreshed.</CardDescription>
           </CardHeader>
           <CardContent>
             {isChartDataLoading ? (
@@ -370,26 +378,26 @@ export default function OverallAnalyticsPage() {
                 <DailyPerformanceChart
                   data={dailyYouTubeChartData}
                   metrics={[
-                    { key: 'views', name: 'Views', color: 'hsl(var(--chart-1))', icon: Eye },
-                    { key: 'likes', name: 'Likes', color: 'hsl(var(--chart-2))', icon: ThumbsUp },
-                    { key: 'comments', name: 'Comments', color: 'hsl(var(--chart-3))', icon: MessageSquare },
+                    { key: 'views', name: 'Total Views (on refresh date)', color: 'hsl(var(--chart-1))', icon: Eye },
+                    { key: 'likes', name: 'Total Likes (on refresh date)', color: 'hsl(var(--chart-2))', icon: ThumbsUp },
+                    { key: 'comments', name: 'Total Comments (on refresh date)', color: 'hsl(var(--chart-3))', icon: MessageSquare },
                   ]}
                   xAxisDataKey="date"
-                  title="YouTube Daily Performance"
+                  title="YouTube Daily Aggregated Stats"
                   platformIcon={Youtube}
                   isLoading={isChartDataLoading}
-                  error={null} // Error handling can be enhanced here
+                  error={null} 
                 />
                 <DailyPerformanceChart
                   data={dailyInstagramChartData}
                   metrics={[
-                    { key: 'plays', name: 'Plays', color: 'hsl(var(--chart-1))', icon: PlayCircle },
-                    { key: 'likes', name: 'Likes', color: 'hsl(var(--chart-2))', icon: ThumbsUp },
-                    { key: 'comments', name: 'Comments', color: 'hsl(var(--chart-3))', icon: MessageSquare },
-                    { key: 'reshares', name: 'Reshares', color: 'hsl(var(--chart-4))', icon: InstagramIcon }, // Assuming Share2 icon is not in lucide
+                    { key: 'plays', name: 'Total Plays (on refresh date)', color: 'hsl(var(--chart-1))', icon: PlayCircle },
+                    { key: 'likes', name: 'Total Likes (on refresh date)', color: 'hsl(var(--chart-2))', icon: ThumbsUp },
+                    { key: 'comments', name: 'Total Comments (on refresh date)', color: 'hsl(var(--chart-3))', icon: MessageSquare },
+                    { key: 'reshares', name: 'Total Reshares (on refresh date)', color: 'hsl(var(--chart-4))', icon: Share2 }, 
                   ]}
                   xAxisDataKey="date"
-                  title="Instagram Reels Daily Performance"
+                  title="Instagram Reels Daily Aggregated Stats"
                   platformIcon={InstagramIcon}
                   isLoading={isChartDataLoading}
                   error={null}
@@ -397,7 +405,7 @@ export default function OverallAnalyticsPage() {
               </div>
             )}
              {(!isChartDataLoading && dailyYouTubeChartData.length === 0 && dailyInstagramChartData.length === 0 && dateRange.from && dateRange.to) && (
-                <p className="text-center text-muted-foreground py-6">No data available for the selected date range.</p>
+                <p className="text-center text-muted-foreground py-6">No data available for the selected date range, or no content was refreshed during this period.</p>
             )}
              {(!dateRange.from || !dateRange.to) && (
                 <p className="text-center text-muted-foreground py-6">Please select a date range to view daily trends.</p>
@@ -408,4 +416,3 @@ export default function OverallAnalyticsPage() {
     </AppLayout>
   );
 }
-
