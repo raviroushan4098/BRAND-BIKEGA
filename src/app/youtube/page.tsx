@@ -17,7 +17,7 @@ import {
   assignYouTubeLinksToUser, 
   getYouTubeLinksForUser, 
   deleteYouTubeLinkForUser,
-  updateYouTubeLastRefreshTimestamp // New import
+  updateYouTubeLastRefreshTimestamp
 } from '@/lib/youtubeLinkService';
 import { fetchYouTubeDetails } from '@/ai/flows/fetch-youtube-details-flow';
 import { generateChannelAnalyticsReport, type ChannelAnalyticsReportOutput, type YouTubeVideoForReport } from '@/ai/flows/generate-channel-analytics-report-flow';
@@ -82,7 +82,7 @@ export default function YouTubeManagementPage() {
 
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [refreshProgress, setRefreshProgress] = useState(0);
-  const [lastRefreshTimestamp, setLastRefreshTimestamp] = useState<string | null>(null); // Stores ISO string
+  const [lastRefreshTimestamp, setLastRefreshTimestamp] = useState<string | null>(null); 
 
   const [isGeneratingChannelReport, setIsGeneratingChannelReport] = useState(false);
 
@@ -195,7 +195,7 @@ export default function YouTubeManagementPage() {
     if (dateRange.from || dateRange.to) {
       processedVideos = processedVideos.filter(video => {
         if (!video.publishedAt) return false;
-        const publishedDate = parseISO(video.publishedAt); // Use parseISO
+        const publishedDate = parseISO(video.publishedAt); 
         if (!isValidDate(publishedDate)) return false;
         if (dateRange.from && publishedDate < dateRange.from) return false;
         if (dateRange.to) {
@@ -214,10 +214,10 @@ export default function YouTubeManagementPage() {
         if (valA === undefined || valA === null) return sortConfig.order === 'asc' ? -1 : 1;
         if (valB === undefined || valB === null) return sortConfig.order === 'asc' ? 1 : -1;
         if (sortConfig.key === 'publishedAt') {
-          const dateA = parseISO(valA as string).getTime(); // Use parseISO
-          const dateB = parseISO(valB as string).getTime(); // Use parseISO
-          if (isNaN(dateA)) return sortConfig.order === 'asc' ? -1 : 1; // Handle invalid dates
-          if (isNaN(dateB)) return sortConfig.order === 'asc' ? 1 : -1; // Handle invalid dates
+          const dateA = parseISO(valA as string).getTime(); 
+          const dateB = parseISO(valB as string).getTime(); 
+          if (isNaN(dateA)) return sortConfig.order === 'asc' ? -1 : 1; 
+          if (isNaN(dateB)) return sortConfig.order === 'asc' ? 1 : -1; 
           return sortConfig.order === 'asc' ? dateA - dateB : dateB - dateA;
         } else if (['views', 'likes', 'comments'].includes(sortConfig.key)) {
           return sortConfig.order === 'asc' ? (valA as number) - (valB as number) : (valB as number) - (valA as number);
@@ -383,7 +383,6 @@ export default function YouTubeManagementPage() {
       const fileInput = document.getElementById('csv-upload') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
       
-      // Update last refresh timestamp after assigning links
       const updateTimestampSuccess = await updateYouTubeLastRefreshTimestamp(selectedUserIdForAdmin);
       if (updateTimestampSuccess) {
           setLastRefreshTimestamp(new Date().toISOString());
@@ -714,41 +713,6 @@ export default function YouTubeManagementPage() {
           </Card>
         )}
         
-        {currentTargetUserId && (
-          <Card className="mb-6 shadow-md">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                   <YoutubeIcon className="h-6 w-6 text-red-500" />
-                   <CardTitle className="text-xl font-semibold">YouTube Feed Actions</CardTitle>
-                </div>
-                <div className="flex flex-col items-end">
-                  <Button 
-                    onClick={handleRefreshFeed} 
-                    disabled={isRefreshing || isLoadingVideos || isGeneratingChannelReport || !currentTargetUserId} 
-                    variant="default" 
-                    size="sm"
-                  >
-                    <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-                    {isRefreshing ? 'Refreshing...' : 'Refresh Feed'}
-                  </Button>
-                  {lastRefreshTimestamp && (() => {
-                      const dateObj = parseISO(lastRefreshTimestamp);
-                      if (isValidDate(dateObj) && dateObj.getFullYear() > 1970) { // Check if valid and not epoch
-                          return (
-                              <p className="text-xs text-muted-foreground mt-1">
-                                  Last refreshed: {format(dateObj, "MMM d, yyyy, h:mm a")}
-                              </p>
-                          );
-                      }
-                      return null; 
-                  })()}
-                </div>
-              </div>
-            </CardHeader>
-          </Card>
-        )}
-
         <Card className="mb-6 shadow-md">
           <CardHeader> <CardTitle className="text-xl font-semibold">Filter & Sort Videos</CardTitle> </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -789,31 +753,67 @@ export default function YouTubeManagementPage() {
         </Card>
 
         {(isLoadingVideos && !summaryStats && !isRefreshing) && (
-          <Card className="mb-6">
-            <CardHeader> <Skeleton className="h-6 w-2/5 mb-2" /> <Skeleton className="h-4 w-1/3" /> </CardHeader>
-            <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4"> <Skeleton className="h-28 w-full rounded-lg" /> <Skeleton className="h-28 w-full rounded-lg" /> <Skeleton className="h-28 w-full rounded-lg" /> <Skeleton className="h-28 w-full rounded-lg" /> </CardContent>
+          <Card className="mb-6 shadow-md">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <Skeleton className="h-6 w-3/5 mb-2" />
+                <Skeleton className="h-4 w-4/5" />
+              </div>
+              <Skeleton className="h-9 w-28" />
+            </CardHeader>
+            <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <Skeleton className="h-28 w-full rounded-lg" />
+              <Skeleton className="h-28 w-full rounded-lg" />
+              <Skeleton className="h-28 w-full rounded-lg" />
+              <Skeleton className="h-28 w-full rounded-lg" />
+            </CardContent>
           </Card>
         )}
 
-        {summaryStats && (!isLoadingVideos || isRefreshing) && (
+        {((!isLoadingVideos && summaryStats) || isRefreshing) && (
           <Card className="mb-6 shadow-md">
-            <CardHeader>
-              <div className="flex items-center justify-between">
+            <CardHeader className="flex flex-row items-center justify-between">
                 <div>
                   <CardTitle className="text-xl font-semibold">Performance Overview</CardTitle>
-                  <CardDescription>
-                    Summary for {user?.role === 'admin' && selectedUserIdForAdmin ? `${usersForAdminSelect.find(u=>u.id === selectedUserIdForAdmin)?.name || 'the selected user'}'s` : "your"} {summaryStats.totalVideos} video(s) { (dateRange.from || dateRange.to) ? "(filtered)" : ""}.
-                  </CardDescription>
+                  {summaryStats && (
+                    <CardDescription>
+                      Summary for {user?.role === 'admin' && selectedUserIdForAdmin ? `${usersForAdminSelect.find(u=>u.id === selectedUserIdForAdmin)?.name || 'the selected user'}'s` : "your"} {summaryStats.totalVideos} video(s) { (dateRange.from || dateRange.to) ? "(filtered)" : ""}.
+                    </CardDescription>
+                  )}
                 </div>
-                {/* Refresh button moved to its own card */}
-              </div>
+                {currentTargetUserId && (
+                  <div className="flex flex-col items-end">
+                    <Button 
+                      onClick={handleRefreshFeed} 
+                      disabled={isRefreshing || isLoadingVideos || isGeneratingChannelReport || !currentTargetUserId} 
+                      variant="default" 
+                      size="sm"
+                    >
+                      <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                      {isRefreshing ? 'Refreshing...' : 'Refresh Feed'}
+                    </Button>
+                    {lastRefreshTimestamp && (() => {
+                        const dateObj = parseISO(lastRefreshTimestamp);
+                        if (isValidDate(dateObj) && dateObj.getFullYear() > 1970) { 
+                            return (
+                                <p className="text-xs text-muted-foreground mt-1">
+                                    Last refreshed: {format(dateObj, "MMM d, yyyy, h:mm a")}
+                                </p>
+                            );
+                        }
+                        return null; 
+                    })()}
+                  </div>
+                )}
             </CardHeader>
-            <CardContent className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-4">
-              <StatCard icon={ListVideo} label="Total Videos" value={summaryStats.totalVideos} />
-              <StatCard icon={Eye} label="Total Views" value={summaryStats.totalViews} />
-              <StatCard icon={ThumbsUp} label="Total Likes" value={summaryStats.totalLikes} />
-              <StatCard icon={MessageSquare} label="Total Comments" value={summaryStats.totalComments} />
-            </CardContent>
+            {summaryStats && (
+              <CardContent className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                <StatCard icon={ListVideo} label="Total Videos" value={summaryStats.totalVideos} />
+                <StatCard icon={Eye} label="Total Views" value={summaryStats.totalViews} />
+                <StatCard icon={ThumbsUp} label="Total Likes" value={summaryStats.totalLikes} />
+                <StatCard icon={MessageSquare} label="Total Comments" value={summaryStats.totalComments} />
+              </CardContent>
+            )}
           </Card>
         )}
         
