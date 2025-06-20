@@ -23,7 +23,7 @@ import { assignInstagramLinksToUser, getInstagramLinksForUser, deleteInstagramLi
 import { toast } from '@/hooks/use-toast';
 import {
   BarChart3, UserPlus, LinkIcon, FileText, UploadCloud, Users, DownloadCloud, Loader2, Instagram as InstagramUIIcon, Eye, Heart, MessageSquare, ListFilter,
-  CalendarIcon, ArrowUpDown, XCircle, FilterX, RefreshCw, PlayCircle, Share2, FileBarChart2 as PptIcon, ChevronDown, Loader2 as ReportLoaderIcon, ListChecks, Trash2, FileSpreadsheet
+  CalendarIcon, ArrowUpDown, XCircle, FilterX, RefreshCw, PlayCircle, Share2, FileBarChart2 as PptIcon, ChevronDown, Loader2 as ReportLoaderIcon, ListChecks, Trash2, FileSpreadsheet, Search
 } from 'lucide-react';
 import { Skeleton } from "@/components/ui/skeleton";
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -98,6 +98,7 @@ export default function InstagramAnalyticsPage() {
   const [assignedLinksForDialog, setAssignedLinksForDialog] = useState<string[]>([]);
   const [isLoadingAssignedLinks, setIsLoadingAssignedLinks] = useState(false);
   const [deletingLinkId, setDeletingLinkId] = useState<string | null>(null);
+  const [assignedLinkSearchTerm, setAssignedLinkSearchTerm] = useState('');
 
 
   const fetchUsersForAdmin = useCallback(async () => {
@@ -612,13 +613,15 @@ export default function InstagramAnalyticsPage() {
       if (shortcodeToDelete) {
         setAllFetchedPosts(prev => prev.filter(p => p.id !== shortcodeToDelete));
       }
-      // Optionally trigger a full refresh if needed, or just update local state
-      // await loadInitialUserPosts(selectedUserIdForAdmin); // Could be too broad
     } else {
       toast({ title: "Error", description: "Failed to delete link.", variant: "destructive" });
     }
     setDeletingLinkId(null);
   };
+  
+  const filteredAssignedLinks = assignedLinksForDialog.filter(link => 
+    link.toLowerCase().includes(assignedLinkSearchTerm.toLowerCase())
+  );
 
   return (
     <AppLayout>
@@ -659,8 +662,8 @@ export default function InstagramAnalyticsPage() {
                   value={selectedUserIdForAdmin} 
                   onValueChange={(value) => {
                     setSelectedUserIdForAdmin(value);
-                    // Clear dialog links if user changes
                     setAssignedLinksForDialog([]); 
+                    setAssignedLinkSearchTerm('');
                   }} 
                   disabled={isLoadingUsers || isAssigning || isRefreshing}
                 >
@@ -688,7 +691,11 @@ export default function InstagramAnalyticsPage() {
               </Button>
               <Dialog open={isViewLinksDialogOpen} onOpenChange={(open) => {
                   setIsViewLinksDialogOpen(open);
-                  if (open && selectedUserIdForAdmin) fetchAssignedLinksForDialog();
+                  if (open && selectedUserIdForAdmin) {
+                    fetchAssignedLinksForDialog();
+                  } else if (!open) {
+                    setAssignedLinkSearchTerm(''); // Clear search on close
+                  }
               }}>
                 <DialogTrigger asChild>
                   <Button variant="outline" disabled={!selectedUserIdForAdmin || isLoadingUsers || isRefreshing || isAssigning}>
@@ -703,16 +710,30 @@ export default function InstagramAnalyticsPage() {
                       Deleting a link here will remove it from tracking.
                     </DialogDescription>
                   </DialogHeader>
-                  <ScrollArea className="h-[300px] my-4 border rounded-md p-2">
+                  <div className="my-4">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input 
+                        type="search" 
+                        placeholder="Search links..." 
+                        value={assignedLinkSearchTerm}
+                        onChange={(e) => setAssignedLinkSearchTerm(e.target.value)}
+                        className="pl-10"
+                      />
+                    </div>
+                  </div>
+                  <ScrollArea className="h-[300px] border rounded-md p-2">
                     {isLoadingAssignedLinks ? (
                       <div className="flex items-center justify-center h-full">
                         <Loader2 className="h-8 w-8 animate-spin text-primary" />
                       </div>
-                    ) : assignedLinksForDialog.length === 0 ? (
-                      <p className="text-sm text-muted-foreground text-center py-4">No links assigned to this user.</p>
+                    ) : filteredAssignedLinks.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-4">
+                        {assignedLinksForDialog.length > 0 ? "No links match your search." : "No links assigned to this user."}
+                      </p>
                     ) : (
                       <ul className="space-y-2">
-                        {assignedLinksForDialog.map((link, index) => (
+                        {filteredAssignedLinks.map((link, index) => (
                           <li key={index} className="flex items-center justify-between p-2 hover:bg-muted/50 rounded-md text-sm">
                             <a href={link} target="_blank" rel="noopener noreferrer" className="truncate hover:underline" title={link}>
                               {link.length > 50 ? `${link.substring(0,47)}...` : link}
