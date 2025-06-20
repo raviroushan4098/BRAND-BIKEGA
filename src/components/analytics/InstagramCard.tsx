@@ -35,9 +35,8 @@ const InstagramCard: React.FC<InstagramCardProps> = ({ post }) => {
             src={post.thumbnailUrl || placeholderImage}
             alt={post.caption || `Instagram post ${post.id}`}
             layout="fill"
-            objectFit="cover"
             data-ai-hint="social media post"
-            className="rounded-t-lg"
+            className="rounded-t-lg object-cover"
             unoptimized={!!post.thumbnailUrl?.includes('cdninstagram')} // Consider if RapidAPI URLs need unoptimization
           />
         </Link>
@@ -79,4 +78,3 @@ const InstagramCard: React.FC<InstagramCardProps> = ({ post }) => {
 };
 
 export default InstagramCard;
-
