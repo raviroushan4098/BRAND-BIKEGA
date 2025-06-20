@@ -11,10 +11,9 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Loader2, Wand2, MessageSquare, Send, UserCircle, Bot } from 'lucide-react';
 import { generalQuery, type GeneralQueryInput, type GeneralQueryOutput } from '@/ai/flows/general-query-flow';
-import { mockYouTubeData, mockInstagramData, type YouTubeVideo, type InstagramPost } from '@/lib/mockData'; // For providing context data
+import { mockYouTubeData, mockInstagramData } from '@/lib/mockData'; 
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from '@/hooks/use-toast';
-import { ScrollArea } from '@/components/ui/scroll-area';
 
 const formSchema = z.object({
   userQuery: z.string().min(3, "Query must be at least 3 characters long."),
@@ -34,7 +33,7 @@ const ContentSuggestionForm = () => {
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null); // Ref for the scrollable CardContent
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -45,11 +44,8 @@ const ContentSuggestionForm = () => {
 
   useEffect(() => {
     // Scroll to bottom when chatHistory updates
-    if (scrollAreaRef.current) {
-      const viewport = scrollAreaRef.current.querySelector('div[data-radix-scroll-area-viewport]');
-      if (viewport) {
-        viewport.scrollTop = viewport.scrollHeight;
-      }
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
   }, [chatHistory]);
 
@@ -115,7 +111,7 @@ const ContentSuggestionForm = () => {
   };
   
   return (
-    <Card className="w-full shadow-xl flex flex-col max-h-[80vh]">
+    <Card className="w-full shadow-xl flex flex-col max-h-[80vh]"> {/* Card is flex container, column, with max height */}
       <CardHeader>
         <div className="flex items-center gap-3">
           <MessageSquare className="h-8 w-8 text-primary" />
@@ -127,34 +123,33 @@ const ContentSuggestionForm = () => {
         </CardDescription>
       </CardHeader>
       
-      <CardContent className="flex-grow flex flex-col overflow-hidden p-0">
-        <ScrollArea className="h-full w-full p-6" ref={scrollAreaRef}>
-          <div className="space-y-4">
-            {chatHistory.map((msg) => (
-              <div key={msg.id} className={`flex items-end space-x-2 ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}>
-                {msg.type === 'ai' && <Bot className="h-6 w-6 text-primary flex-shrink-0 mb-1" />}
-                <div className={`max-w-[70%] p-3 rounded-lg shadow-md ${msg.type === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
-                  <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-                  <p className="text-xs opacity-70 mt-1 text-right">
-                    {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </p>
-                </div>
-                {msg.type === 'user' && <UserCircle className="h-6 w-6 text-muted-foreground flex-shrink-0 mb-1" />}
+      {/* CardContent is now the scrollable area with flex-grow and overflow-y-auto */}
+      <CardContent className="flex-grow overflow-y-auto p-6" ref={chatContainerRef}> 
+        <div className="space-y-4"> {/* Inner div for message layout */}
+          {chatHistory.map((msg) => (
+            <div key={msg.id} className={`flex items-end space-x-2 ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}>
+              {msg.type === 'ai' && <Bot className="h-6 w-6 text-primary flex-shrink-0 mb-1" />}
+              <div className={`max-w-[70%] p-3 rounded-lg shadow-md ${msg.type === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
+                <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                <p className="text-xs opacity-70 mt-1 text-right">
+                  {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </p>
               </div>
-            ))}
-            {isLoading && chatHistory[chatHistory.length-1]?.type === 'user' && (
-              <div className="flex items-end space-x-2 justify-start">
-                <Bot className="h-6 w-6 text-primary flex-shrink-0 mb-1" />
-                <div className="max-w-[70%] p-3 rounded-lg bg-muted text-muted-foreground shadow-md">
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                </div>
+              {msg.type === 'user' && <UserCircle className="h-6 w-6 text-muted-foreground flex-shrink-0 mb-1" />}
+            </div>
+          ))}
+          {isLoading && chatHistory[chatHistory.length-1]?.type === 'user' && (
+            <div className="flex items-end space-x-2 justify-start">
+              <Bot className="h-6 w-6 text-primary flex-shrink-0 mb-1" />
+              <div className="max-w-[70%] p-3 rounded-lg bg-muted text-muted-foreground shadow-md">
+                <Loader2 className="h-5 w-5 animate-spin" />
               </div>
-            )}
-          </div>
-        </ScrollArea>
+            </div>
+          )}
+        </div>
       </CardContent>
 
-      <CardFooter className="border-t p-4 shrink-0">
+      <CardFooter className="border-t p-4 shrink-0"> {/* Footer does not grow or shrink */}
         <form onSubmit={form.handleSubmit(onSubmit)} className="flex w-full items-start gap-2">
           <Textarea
             {...form.register('userQuery')}
@@ -190,4 +185,3 @@ const ContentSuggestionForm = () => {
 };
 
 export default ContentSuggestionForm;
-
