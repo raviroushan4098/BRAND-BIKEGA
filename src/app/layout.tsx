@@ -2,6 +2,7 @@ import type {Metadata} from 'next';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 import { AuthProvider } from '@/hooks/useAuth'; // AuthProvider for global state
+import Script from 'next/script'; // Import the Script component
 
 export const metadata: Metadata = {
   title: 'Brand Dikhega',
@@ -12,6 +13,8 @@ export const metadata: Metadata = {
     // apple: '/apple-icon.png',
   },
 };
+
+const GA_MEASUREMENT_ID = "G-TSV3YRCHJD";
 
 export default function RootLayout({
   children,
@@ -30,6 +33,24 @@ export default function RootLayout({
           {children}
           <Toaster />
         </AuthProvider>
+        
+        {/* Google Analytics Scripts */}
+        <Script
+          strategy="afterInteractive"
+          src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
+        />
+        <Script
+          id="gtag-init"
+          strategy="afterInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+              window.dataLayer = window.dataLayer || [];
+              function gtag(){dataLayer.push(arguments);}
+              gtag('js', new Date());
+              gtag('config', '${GA_MEASUREMENT_ID}');
+            `,
+          }}
+        />
       </body>
     </html>
   );
