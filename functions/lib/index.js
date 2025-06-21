@@ -208,7 +208,7 @@ async function saveVideoAnalytics(userId, videoData) {
     if (!userId || !videoData || !videoData.id)
         return;
     const videoDocRef = db.collection('userVideoAnalytics').doc(userId).collection('videos').doc(videoData.id);
-    const dataToSave = Object.assign(Object.assign({}, videoData), { lastFetched: new Date().toISOString() });
+    const dataToSave = Object.assign(Object.assign({}, videoData), { id: videoData.id, lastFetched: new Date().toISOString() });
     await videoDocRef.set(dataToSave, { merge: true });
 }
 /**
@@ -276,7 +276,7 @@ async function saveInstagramPostAnalytics(userId, postData) {
     if (!userId || !postData || !postData.id)
         return;
     const postDocRef = db.collection('userInstagramPostAnalytics').doc(userId).collection('posts').doc(postData.id);
-    const dataToSave = Object.assign(Object.assign({}, postData), { reelUrl: postData.reelUrl || '', likes: postData.likes || 0, comments: postData.comments || 0, playCount: postData.playCount || 0, lastFetched: new Date().toISOString() });
+    const dataToSave = Object.assign(Object.assign({ reelUrl: '', likes: 0, comments: 0, playCount: 0 }, postData), { id: postData.id, lastFetched: new Date().toISOString() });
     await postDocRef.set(dataToSave, { merge: true });
 }
 // --- Main Scheduled Function ---
