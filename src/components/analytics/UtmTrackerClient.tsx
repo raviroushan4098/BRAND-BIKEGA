@@ -6,8 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Link2, Loader2, PlusCircle, Trash2, Copy, Users, BarChartBig } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
-import type { UtmLink } from '@/lib/utmLinkService';
-import { addUtmLink, getUtmLinksForUser, deleteUtmLink } from '@/lib/utmLinkService';
+import type { RedirectLink } from '@/lib/utmLinkService';
+import { addRedirectLink, getRedirectLinksForUser, deleteRedirectLink } from '@/lib/utmLinkService';
 import type { User } from '@/lib/authService';
 import { getAllUsers as apiGetAllUsers } from '@/lib/authService';
 import { Button } from '../ui/button';
@@ -35,11 +35,11 @@ type UtmFormValues = z.infer<typeof utmFormSchema>;
 export default function UtmTrackerClient() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [links, setLinks] = useState<UtmLink[]>([]);
+  const [links, setLinks] = useState<RedirectLink[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [generatedUrl, setGeneratedUrl] = useState('');
+  const [generatedUrlPreview, setGeneratedUrlPreview] = useState('');
   
   const [usersForAdminSelect, setUsersForAdminSelect] = useState<User[]>([]);
   const [selectedUserIdForAdmin, setSelectedUserIdForAdmin] = useState<string>('');
@@ -83,7 +83,6 @@ export default function UtmTrackerClient() {
     fetchUsersForAdmin();
   }, [fetchUsersForAdmin]);
 
-  // Refactored data fetching logic to directly depend on currentTargetUserId
   useEffect(() => {
     const fetchLinks = async () => {
       if (!currentTargetUserId) {
@@ -95,7 +94,7 @@ export default function UtmTrackerClient() {
       setIsLoading(true);
       setFetchError(null);
       try {
-        const userLinks = await getUtmLinksForUser(currentTargetUserId);
+        const userLinks = await getRedirectLinksForUser(currentTargetUserId);
         setLinks(userLinks);
       } catch (error: any) {
         console.error(error);
@@ -119,16 +118,13 @@ export default function UtmTrackerClient() {
       try {
         new URL(baseUrl || "https://example.com");
         if (baseUrl && utmSource && utmMedium && utmCampaign) {
-          const url = new URL(baseUrl);
-          url.searchParams.set('utm_source', utmSource);
-          url.searchParams.set('utm_medium', utmMedium);
-          url.searchParams.set('utm_campaign', utmCampaign);
-          setGeneratedUrl(url.toString());
+          // Preview shows the structure, as the ID is generated on save
+          setGeneratedUrlPreview(`${window.location.origin}/track/...`);
         } else {
-          setGeneratedUrl('');
+          setGeneratedUrlPreview('');
         }
       } catch (error) {
-        setGeneratedUrl('');
+        setGeneratedUrlPreview('');
       }
     });
     return () => subscription.unsubscribe();
@@ -141,24 +137,27 @@ export default function UtmTrackerClient() {
     }
     setIsSubmitting(true);
     const newLinkData = {
-      ...data,
       userId: currentTargetUserId,
-      generatedUrl,
+      destinationUrl: data.baseUrl,
+      utmSource: data.utmSource,
+      utmMedium: data.utmMedium,
+      utmCampaign: data.utmCampaign,
+      origin: window.location.origin,
     };
-    const newLink = await addUtmLink(newLinkData);
+    const newLink = await addRedirectLink(newLinkData);
     if (newLink) {
       setLinks(prev => [newLink, ...prev]);
-      toast({ title: "Success", description: "UTM link saved successfully." });
+      toast({ title: "Success", description: "Redirect link saved successfully." });
       reset();
-      setGeneratedUrl('');
+      setGeneratedUrlPreview('');
     } else {
-      toast({ title: "Error", description: "Failed to save UTM link.", variant: "destructive" });
+      toast({ title: "Error", description: "Failed to save redirect link.", variant: "destructive" });
     }
     setIsSubmitting(false);
   };
 
   const handleDelete = async (linkId: string) => {
-    const success = await deleteUtmLink(linkId);
+    const success = await deleteRedirectLink(linkId);
     if (success) {
       setLinks(prev => prev.filter(link => link.id !== linkId));
       toast({ title: "Success", description: "Link deleted." });
@@ -169,7 +168,7 @@ export default function UtmTrackerClient() {
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    toast({ title: "Copied!", description: "UTM link copied to clipboard." });
+    toast({ title: "Copied!", description: "Short link copied to clipboard." });
   };
   
   const handleFetchAnalytics = async (campaignName: string) => {
@@ -183,7 +182,11 @@ export default function UtmTrackerClient() {
 
     try {
         const result = await fetchCampaignAnalytics({ propertyId, campaignName });
-        setCurrentAnalytics(result);
+        if (result.error && !result.aiSummary) {
+          setAnalyticsError(result.error);
+        } else {
+          setCurrentAnalytics(result);
+        }
     } catch (e: any) {
         setAnalyticsError(e.message || "An unexpected error occurred.");
         setCurrentAnalytics(null);
@@ -202,7 +205,7 @@ export default function UtmTrackerClient() {
             <CardTitle className="text-3xl font-bold">UTM Link Tracker</CardTitle>
           </div>
           <CardDescription>
-            Create and manage UTM-tagged links. Campaign analytics are fetched using a pre-configured Google Analytics Property ID.
+            Create short, trackable redirect links. Campaign analytics are fetched using a pre-configured Google Analytics Property ID.
           </CardDescription>
         </CardHeader>
       </Card>
@@ -210,7 +213,7 @@ export default function UtmTrackerClient() {
       <div className="grid gap-8 lg:grid-cols-3">
         <Card className="lg:col-span-1 shadow-md">
           <CardHeader>
-            <CardTitle>UTM Link Generator</CardTitle>
+            <CardTitle>Link Generator</CardTitle>
             <CardDescription>
               {user?.role === 'admin' 
                 ? 'Select a user, then fill out the fields to create a tracked link.'
@@ -248,7 +251,7 @@ export default function UtmTrackerClient() {
             )}
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               <div>
-                <Label htmlFor="baseUrl">Base URL</Label>
+                <Label htmlFor="baseUrl">Destination URL</Label>
                 <Input id="baseUrl" placeholder="https://example.com/page" {...form.register('baseUrl')} />
                 {form.formState.errors.baseUrl && <p className="text-destructive text-xs mt-1">{form.formState.errors.baseUrl.message}</p>}
               </div>
@@ -268,10 +271,10 @@ export default function UtmTrackerClient() {
                  {form.formState.errors.utmCampaign && <p className="text-destructive text-xs mt-1">{form.formState.errors.utmCampaign.message}</p>}
               </div>
               <div>
-                <Label htmlFor="generatedUrl">Generated URL</Label>
-                <Input id="generatedUrl" value={generatedUrl} readOnly placeholder="Final URL will appear here..." className="bg-muted" />
+                <Label htmlFor="generatedUrl">Generated Short Link (Preview)</Label>
+                <Input id="generatedUrl" value={generatedUrlPreview} readOnly placeholder="Short link will appear here..." className="bg-muted" />
               </div>
-              <Button type="submit" disabled={isSubmitting || !generatedUrl || form.formState.isSubmitting || !form.formState.isValid || !currentTargetUserId} className="w-full">
+              <Button type="submit" disabled={isSubmitting || !generatedUrlPreview || form.formState.isSubmitting || !form.formState.isValid || !currentTargetUserId} className="w-full">
                 {isSubmitting ? <Loader2 className="animate-spin" /> : <PlusCircle className="mr-2"/>}
                 Save Link
               </Button>
@@ -287,7 +290,7 @@ export default function UtmTrackerClient() {
                   ? `Showing links for ${usersForAdminSelect.find(u => u.id === selectedUserIdForAdmin)?.name || 'the selected user'}.`
                   : user?.role === 'admin' 
                   ? 'Select a user to view their saved links.'
-                  : 'Your previously generated UTM links.'
+                  : 'Your previously generated short links.'
               }
             </CardDescription>
           </CardHeader>
@@ -307,8 +310,9 @@ export default function UtmTrackerClient() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead>Short Link</TableHead>
+                      <TableHead>Destination</TableHead>
                       <TableHead>Campaign</TableHead>
-                      <TableHead>Generated URL</TableHead>
                       <TableHead>Created</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
@@ -316,16 +320,21 @@ export default function UtmTrackerClient() {
                   <TableBody>
                     {links.map(link => (
                       <TableRow key={link.id}>
-                        <TableCell className="font-medium">{link.utmCampaign}</TableCell>
                         <TableCell>
-                          <a href={link.generatedUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline truncate block max-w-xs" title={link.generatedUrl}>
-                            {link.generatedUrl}
+                           <button onClick={() => copyToClipboard(link.shortUrl)} className="flex items-center gap-1 text-blue-600 hover:underline" title="Copy Short Link">
+                            {link.shortUrl.replace(/^https?:\/\//, '')}
+                          </button>
+                        </TableCell>
+                        <TableCell>
+                          <a href={link.destinationUrl} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:underline truncate block max-w-xs" title={link.destinationUrl}>
+                            {link.destinationUrl}
                           </a>
                         </TableCell>
+                        <TableCell className="font-medium">{link.utmCampaign}</TableCell>
                         <TableCell>{isValid(parseISO(link.createdAt)) ? format(parseISO(link.createdAt), 'MMM d, yyyy') : 'N/A'}</TableCell>
                         <TableCell className="text-right space-x-1">
                           <Button variant="ghost" size="icon" onClick={() => handleFetchAnalytics(link.utmCampaign)} title="View Analytics"><BarChartBig className="h-4 w-4" /></Button>
-                          <Button variant="ghost" size="icon" onClick={() => copyToClipboard(link.generatedUrl)} title="Copy Link"><Copy className="h-4 w-4"/></Button>
+                          <Button variant="ghost" size="icon" onClick={() => copyToClipboard(link.shortUrl)} title="Copy Link"><Copy className="h-4 w-4"/></Button>
                           <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDelete(link.id)} title="Delete Link"><Trash2 className="h-4 w-4" /></Button>
                         </TableCell>
                       </TableRow>
