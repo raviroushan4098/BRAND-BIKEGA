@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -16,13 +15,6 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { format, eachDayOfInterval, startOfDay, endOfDay, isValid, parseISO, isWithinInterval } from 'date-fns';
 import DailyPerformanceChart from '@/components/analytics/DailyPerformanceChart';
-
-interface CombinedStats {
-  totalContentPieces: number;
-  totalCombinedLikes: number;
-  totalCombinedComments: number;
-  totalCombinedViewsPlays: number;
-}
 
 interface YouTubeSummaryStats {
   totalVideos: number;
@@ -89,7 +81,6 @@ export default function OverallAnalyticsPage() {
   const [youtubeVideos, setYoutubeVideos] = useState<StoredYouTubeVideo[]>([]);
   const [instagramPosts, setInstagramPosts] = useState<StoredInstagramPost[]>([]);
 
-  const [combinedStats, setCombinedStats] = useState<CombinedStats | null>(null);
   const [youtubeSummary, setYoutubeSummary] = useState<YouTubeSummaryStats | null>(null);
   const [instagramSummary, setInstagramSummary] = useState<InstagramSummaryStats | null>(null);
 
@@ -166,16 +157,9 @@ export default function OverallAnalyticsPage() {
         totalReshares: igReshares,
       });
 
-      setCombinedStats({
-        totalContentPieces: youtubeVideos.length + instagramPosts.length,
-        totalCombinedLikes: ytLikes + igLikes,
-        totalCombinedComments: ytComments + igComments,
-        totalCombinedViewsPlays: ytViews + igPlays,
-      });
     } else {
         setYoutubeSummary(null);
         setInstagramSummary(null);
-        setCombinedStats(null);
     }
   }, [youtubeVideos, instagramPosts]);
 
@@ -274,24 +258,12 @@ export default function OverallAnalyticsPage() {
           </CardHeader>
         </Card>
 
-        {!combinedStats && !youtubeSummary && !instagramSummary && (
+        {!youtubeSummary && !instagramSummary && (
              <div className="text-center py-10">
                 <Package className="h-16 w-16 mx-auto mb-4 text-muted-foreground opacity-50" />
                 <p className="text-xl text-muted-foreground">No data found.</p>
                 <p className="text-sm text-muted-foreground">Please ensure you have content tracked on YouTube and/or Instagram pages.</p>
             </div>
-        )}
-
-        {combinedStats && (
-          <div className="mb-8">
-            <h2 className="text-2xl font-semibold mb-4 text-foreground">Combined Totals (All Time)</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <StatDisplayCard title="Content Pieces" value={combinedStats.totalContentPieces} icon={Package} description="Videos + Reels" size="compact" />
-              <StatDisplayCard title="Views & Plays" value={combinedStats.totalCombinedViewsPlays} icon={Eye} description="YT Views + IG Plays" size="compact"/>
-              <StatDisplayCard title="Likes" value={combinedStats.totalCombinedLikes} icon={ThumbsUp} description="YT Likes + IG Likes" size="compact"/>
-              <StatDisplayCard title="Comments" value={combinedStats.totalCombinedComments} icon={MessageSquare} description="YT Comments + IG Comments" size="compact"/>
-            </div>
-          </div>
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
