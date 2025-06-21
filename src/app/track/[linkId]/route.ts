@@ -3,7 +3,6 @@ import { getRedirectLinkByShortId, type RedirectLink } from '@/lib/utmLinkServic
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { collection, query, where, limit, getDocs } from 'firebase/firestore';
-import { randomUUID } from 'crypto';
 
 const GA_MEASUREMENT_ID = "G-TSV3YRCHJD";
 
@@ -27,8 +26,8 @@ async function getMeasurementProtocolApiSecret(): Promise<string | null> {
 }
 
 async function sendAnalyticsEvent(linkData: RedirectLink, apiSecret: string) {
-  // A unique identifier for a client. Using a new UUID for each event treats each click as a unique interaction.
-  const clientId = randomUUID();
+  // Use the universally available Web Crypto API
+  const clientId = crypto.randomUUID(); 
   const sessionId = `${clientId}_${Math.floor(Date.now() / 1000)}`;
 
   const eventPayload = {
@@ -36,12 +35,10 @@ async function sendAnalyticsEvent(linkData: RedirectLink, apiSecret: string) {
     events: [{
       name: 'campaign_click',
       params: {
-        // Corrected parameters for GA4 campaign attribution via Measurement Protocol
         campaign_source: linkData.utmSource,
         campaign_medium: linkData.utmMedium,
         campaign_name: linkData.utmCampaign,
         
-        // Session parameters
         session_id: sessionId,
         engagement_time_msec: "100", 
         page_location: linkData.destinationUrl,
