@@ -121,9 +121,9 @@ export default function ApiManagementPage() {
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>Important Security Notice</AlertTitle>
           <AlertDescription>
-            API keys are sensitive credentials. They are stored directly in Firestore in this system.
-            For production environments, especially with high-privilege keys, using a dedicated secrets management service (e.g., Google Secret Manager, HashiCorp Vault) is strongly recommended for enhanced security.
-            Treat these keys like passwords and ensure Firestore security rules are appropriately configured.
+            API keys are sensitive credentials. They are stored directly in Firestore. For production environments, use a dedicated secrets management service (e.g., Google Secret Manager).
+            When adding a key for Google Analytics, paste the entire JSON content of the service account credential file.
+            Treat all keys like passwords and ensure Firestore security rules are appropriately configured.
           </AlertDescription>
         </Alert>
 

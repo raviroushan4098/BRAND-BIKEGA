@@ -12,11 +12,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertTriangle, Eye, EyeOff } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 
 const apiKeyFormSchema = z.object({
   serviceName: z.string().min(2, "Service name must be at least 2 characters."),
-  keyValue: z.string().min(10, "API Key value must be at least 10 characters."),
+  keyValue: z.string().min(10, "API Key value / JSON must be at least 10 characters."),
   description: z.string().optional(),
 });
 
@@ -32,7 +32,6 @@ interface ApiKeyFormProps {
 
 const ApiKeyForm: React.FC<ApiKeyFormProps> = ({ isOpen, onOpenChange, onSubmitApiKey, initialData, isLoading }) => {
   const isEditing = !!initialData;
-  const [showKeyValue, setShowKeyValue] = React.useState(false);
 
   const form = useForm<ApiKeyFormValues>({
     resolver: zodResolver(apiKeyFormSchema),
@@ -58,7 +57,6 @@ const ApiKeyForm: React.FC<ApiKeyFormProps> = ({ isOpen, onOpenChange, onSubmitA
           description: '',
         });
       }
-      setShowKeyValue(false); // Reset visibility on open
     }
   }, [initialData, form, isOpen]);
 
@@ -72,7 +70,7 @@ const ApiKeyForm: React.FC<ApiKeyFormProps> = ({ isOpen, onOpenChange, onSubmitA
         <DialogHeader>
           <DialogTitle>{isEditing ? 'Edit API Key' : 'Add New API Key'}</DialogTitle>
           <DialogDescription>
-            Enter the details for the API key.
+            Enter the details for the API key or service credential.
           </DialogDescription>
         </DialogHeader>
 
@@ -93,7 +91,7 @@ const ApiKeyForm: React.FC<ApiKeyFormProps> = ({ isOpen, onOpenChange, onSubmitA
                 <FormItem>
                   <FormLabel>Service Name</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., OpenAI, Google Maps" {...field} />
+                    <Input placeholder="e.g., youtube, RapidAPI-Instagram-Scraper, google-analytics" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -104,27 +102,14 @@ const ApiKeyForm: React.FC<ApiKeyFormProps> = ({ isOpen, onOpenChange, onSubmitA
               name="keyValue"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>API Key Value</FormLabel>
-                  <div className="relative">
-                    <FormControl>
-                      <Input 
-                        type={showKeyValue ? "text" : "password"} 
-                        placeholder="Enter the API key" 
-                        {...field} 
-                        className="pr-10"
-                      />
-                    </FormControl>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground"
-                      onClick={() => setShowKeyValue(!showKeyValue)}
-                      aria-label={showKeyValue ? "Hide API key" : "Show API key"}
-                    >
-                      {showKeyValue ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </Button>
-                  </div>
+                  <FormLabel>API Key Value / JSON Credentials</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      placeholder="For simple keys, enter the key value. For Google Analytics, paste the entire service account JSON object here."
+                      className="min-h-[120px] font-mono text-xs"
+                      {...field}
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -147,7 +132,7 @@ const ApiKeyForm: React.FC<ApiKeyFormProps> = ({ isOpen, onOpenChange, onSubmitA
                 <Button type="button" variant="outline" disabled={isLoading}>Cancel</Button>
               </DialogClose>
               <Button type="submit" disabled={isLoading}>
-                {isLoading ? (isEditing ? 'Saving...' : 'Adding...') : (isEditing ? 'Save API Key' : 'Add API Key')}
+                {isLoading ? (isEditing ? 'Saving...' : 'Adding...') : (isEditing ? 'Save Changes' : 'Add Credential')}
               </Button>
             </DialogFooter>
           </form>
