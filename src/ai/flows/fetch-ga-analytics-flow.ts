@@ -51,7 +51,6 @@ const CampaignAnalyticsOutputSchema = z.object({
   sessions: z.number().default(0),
   conversions: z.number().default(0),
   bounceRate: z.number().default(0),
-  averageSessionDuration: z.number().default(0), // in seconds
   error: z.string().optional(),
 });
 export type CampaignAnalyticsOutput = z.infer<typeof CampaignAnalyticsOutputSchema>;
@@ -101,7 +100,6 @@ const fetchCampaignAnalyticsFlow = ai.defineFlow(
           { name: 'sessions' },
           { name: 'conversions' },
           { name: 'bounceRate' },
-          { name: 'averageSessionDuration' },
         ],
         dimensionFilter: {
           filter: {
@@ -131,7 +129,6 @@ const fetchCampaignAnalyticsFlow = ai.defineFlow(
         sessions: getMetricValue(1),
         conversions: getMetricValue(2),
         bounceRate: getMetricValue(3),
-        averageSessionDuration: getMetricValue(4),
       };
 
       console.log(`[fetchCampaignAnalyticsFlow] Parsed analytics data for ${campaignName}:`, analyticsData);

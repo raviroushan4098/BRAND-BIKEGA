@@ -56,12 +56,6 @@ const GaAnalyticsDisplay: React.FC<GaAnalyticsDisplayProps> = ({ analytics, isLo
       </div>
     );
   }
-  
-  const formatDuration = (seconds: number) => {
-    const min = Math.floor(seconds / 60);
-    const sec = Math.round(seconds % 60);
-    return `${min}m ${sec}s`;
-  };
 
   return (
     <div className="space-y-4 p-2">
@@ -69,10 +63,7 @@ const GaAnalyticsDisplay: React.FC<GaAnalyticsDisplayProps> = ({ analytics, isLo
         <StatCard title="Total Users" value={analytics.totalUsers.toLocaleString()} icon={Users} />
         <StatCard title="Sessions" value={analytics.sessions.toLocaleString()} icon={BarChart2} />
         <StatCard title="Conversions" value={analytics.conversions.toLocaleString()} icon={CheckCircle} />
-      </div>
-       <div className="flex flex-wrap gap-4">
         <StatCard title="Bounce Rate" value={`${(analytics.bounceRate * 100).toFixed(2)}%`} icon={Percent} />
-        <StatCard title="Avg. Session" value={formatDuration(analytics.averageSessionDuration)} icon={Timer} />
       </div>
       <p className="text-xs text-muted-foreground text-center pt-2">Data from the last 90 days.</p>
     </div>
