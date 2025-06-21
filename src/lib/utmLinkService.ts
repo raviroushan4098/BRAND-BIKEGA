@@ -9,8 +9,6 @@ import {
   doc,
   query,
   where,
-  orderBy,
-  Timestamp,
 } from 'firebase/firestore';
 
 export interface UtmLink {
@@ -44,13 +42,23 @@ export const addUtmLink = async (linkData: Omit<UtmLink, 'id' | 'createdAt'>): P
 export const getUtmLinksForUser = async (userId: string): Promise<UtmLink[]> => {
   if (!userId) return [];
   try {
+    // The query is simplified to remove the 'orderBy' clause that required a composite index.
     const q = query(
       collection(db, 'utmLinks'),
-      where('userId', '==', userId),
-      orderBy('createdAt', 'desc')
+      where('userId', '==', userId)
     );
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as UtmLink));
+    const links = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as UtmLink));
+
+    // We now sort the links here after fetching them.
+    // This provides the same result (most recent first) without needing manual index creation in Firestore.
+    links.sort((a, b) => {
+      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return dateB - dateA; // Sort descending
+    });
+    
+    return links;
   } catch (error) {
     console.error("Error fetching UTM links: ", error);
     throw error; // Re-throw the error to be caught by the calling component
