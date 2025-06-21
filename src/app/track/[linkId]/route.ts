@@ -27,21 +27,25 @@ async function getMeasurementProtocolApiSecret(): Promise<string | null> {
 
 async function sendAnalyticsEvent(linkData: RedirectLink, apiSecret: string) {
   // A unique ID for the client. This should be persisted for a user across sessions if possible.
-  // For this server-side context, we generate a new one for each redirect.
+  // For this server-side context where we can't use cookies, we generate a new one.
   const clientId = crypto.randomUUID();
+  
+  // A unique ID for the session. This is required for session attribution.
+  // We use a simple timestamp-based ID.
+  const sessionId = `${Math.floor(Date.now() / 1000)}`;
 
-  // The event payload. We are sending a 'session_start' event to ensure
-  // Google Analytics correctly attributes the new session to our campaign.
   const eventPayload = {
     client_id: clientId,
     events: [{
-      name: 'session_start', // Using a standard event for better processing by GA.
+      name: 'session_start',
       params: {
+        session_id: sessionId, // CRUCIAL for attribution
         campaign_source: linkData.utmSource,
         campaign_medium: linkData.utmMedium,
         campaign_name: linkData.utmCampaign,
         // page_location is helpful for context
         page_location: linkData.destinationUrl,
+        engagement_time_msec: '1', // A minimal non-zero engagement time
       },
     }],
   };
@@ -103,4 +107,3 @@ export async function GET(
     return NextResponse.redirect(new URL('/', request.url));
   }
 }
-    
