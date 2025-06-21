@@ -9,7 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { UtmLink } from '@/lib/utmLinkService';
 import { addUtmLink, getUtmLinksForUser, deleteUtmLink } from '@/lib/utmLinkService';
 import type { User } from '@/lib/authService';
-import { getAllUsers as apiGetAllUsers, saveUserGaPropertyId } from '@/lib/authService';
+import { getAllUsers as apiGetAllUsers } from '@/lib/authService';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -45,7 +45,6 @@ export default function UtmTrackerClient() {
   const [selectedUserIdForAdmin, setSelectedUserIdForAdmin] = useState<string>('');
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
 
-  const [gaPropertyId, setGaPropertyId] = useState('');
   const [isAnalyticsDialogOpen, setIsAnalyticsDialogOpen] = useState(false);
   const [currentAnalytics, setCurrentAnalytics] = useState<CampaignAnalyticsOutput | null>(null);
   const [isAnalyticsLoading, setIsAnalyticsLoading] = useState(false);
@@ -113,15 +112,6 @@ export default function UtmTrackerClient() {
     fetchLinks();
   }, [currentTargetUserId]);
   
-  useEffect(() => {
-    if (user?.role === 'admin') {
-        const selectedUser = usersForAdminSelect.find(u => u.id === currentTargetUserId);
-        setGaPropertyId(selectedUser?.gaPropertyId || '');
-    } else {
-        setGaPropertyId(user?.gaPropertyId || '');
-    }
-  }, [currentTargetUserId, usersForAdminSelect, user]);
-
 
   useEffect(() => {
     const subscription = watch((values) => {
@@ -183,10 +173,8 @@ export default function UtmTrackerClient() {
   };
   
   const handleFetchAnalytics = async (campaignName: string) => {
-    if (!gaPropertyId) {
-      toast({ title: "Missing ID", description: "Please enter your Google Analytics Property ID first.", variant: "destructive" });
-      return;
-    }
+    const propertyId = '475901241';
+
     setIsAnalyticsLoading(true);
     setCurrentAnalytics(null);
     setAnalyticsError(null);
@@ -194,7 +182,7 @@ export default function UtmTrackerClient() {
     setIsAnalyticsDialogOpen(true);
 
     try {
-        const result = await fetchCampaignAnalytics({ propertyId: gaPropertyId, campaignName });
+        const result = await fetchCampaignAnalytics({ propertyId, campaignName });
         if (result.error) {
           setAnalyticsError(result.error);
         } else {
@@ -204,27 +192,6 @@ export default function UtmTrackerClient() {
         setAnalyticsError(e.message || "An unexpected error occurred.");
     } finally {
         setIsAnalyticsLoading(false);
-    }
-  };
-  
-  const handleSaveGaPropertyId = async () => {
-    if (!currentTargetUserId) return;
-    
-    let originalId = '';
-    if (user?.role === 'admin') {
-        const selectedUser = usersForAdminSelect.find(u => u.id === currentTargetUserId);
-        originalId = selectedUser?.gaPropertyId || '';
-    } else {
-        originalId = user?.gaPropertyId || '';
-    }
-
-    if (gaPropertyId === originalId) return;
-
-    const success = await saveUserGaPropertyId(currentTargetUserId, gaPropertyId);
-    if (success) {
-        toast({ title: "Success", description: "Google Analytics Property ID saved." });
-    } else {
-        toast({ title: "Error", description: "Failed to save Property ID.", variant: "destructive" });
     }
   };
 
@@ -238,24 +205,9 @@ export default function UtmTrackerClient() {
             <CardTitle className="text-3xl font-bold">UTM Link Tracker</CardTitle>
           </div>
           <CardDescription>
-            Create and manage UTM-tagged links. Connect to Google Analytics to see campaign performance.
+            Create and manage UTM-tagged links. Campaign analytics are fetched using a pre-configured Google Analytics Property ID.
           </CardDescription>
         </CardHeader>
-        <CardContent>
-            <Label htmlFor="gaPropertyId">Google Analytics Property ID</Label>
-            <Input 
-                id="gaPropertyId" 
-                placeholder="Enter GA4 Property ID and click away to save"
-                value={gaPropertyId}
-                onChange={(e) => setGaPropertyId(e.target.value)}
-                onBlur={handleSaveGaPropertyId}
-                className="max-w-sm mt-1"
-                disabled={!currentTargetUserId}
-            />
-            <p className="text-xs text-muted-foreground mt-1">
-                Required to fetch campaign analytics. This ID is saved per-user.
-            </p>
-        </CardContent>
       </Card>
 
       <div className="grid gap-8 lg:grid-cols-3">

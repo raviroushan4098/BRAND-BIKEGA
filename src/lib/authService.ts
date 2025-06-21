@@ -135,15 +135,3 @@ export const adminDeleteUser = async (userId: string): Promise<boolean> => {
     return false;
   }
 };
-
-export const saveUserGaPropertyId = async (userId: string, gaPropertyId: string): Promise<boolean> => {
-  if (!userId) return false;
-  try {
-    const userRef = doc(db, 'users', userId);
-    await updateDoc(userRef, { gaPropertyId });
-    return true;
-  } catch (error) {
-    console.error(`Error saving GA Property ID for user ${userId}:`, error);
-    return false;
-  }
-};
