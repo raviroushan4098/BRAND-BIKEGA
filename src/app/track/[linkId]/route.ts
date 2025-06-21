@@ -26,28 +26,27 @@ async function getMeasurementProtocolApiSecret(): Promise<string | null> {
 }
 
 async function sendAnalyticsEvent(linkData: RedirectLink, apiSecret: string) {
-  // Use the universally available Web Crypto API
-  const clientId = crypto.randomUUID(); 
-  const sessionId = `${clientId}_${Math.floor(Date.now() / 1000)}`;
+  // A unique ID for the client. This should be persisted for a user across sessions if possible.
+  // For this server-side context, we generate a new one for each redirect.
+  const clientId = crypto.randomUUID();
 
+  // The event payload. We are sending a 'session_start' event to ensure
+  // Google Analytics correctly attributes the new session to our campaign.
   const eventPayload = {
     client_id: clientId,
     events: [{
-      name: 'campaign_click',
+      name: 'session_start', // Using a standard event for better processing by GA.
       params: {
         campaign_source: linkData.utmSource,
         campaign_medium: linkData.utmMedium,
         campaign_name: linkData.utmCampaign,
-        
-        session_id: sessionId,
-        engagement_time_msec: "100", 
+        // page_location is helpful for context
         page_location: linkData.destinationUrl,
-        page_title: `Redirect for ${linkData.utmCampaign}`,
       },
     }],
   };
   
-  console.log(`[Redirect Service] Preparing to send Measurement Protocol event for campaign: ${linkData.utmCampaign}`);
+  console.log(`[Redirect Service] Preparing to send 'session_start' event for campaign: ${linkData.utmCampaign}`);
   console.log('[Redirect Service] Payload:', JSON.stringify(eventPayload, null, 2));
 
   try {
@@ -61,7 +60,7 @@ async function sendAnalyticsEvent(linkData: RedirectLink, apiSecret: string) {
         const responseBody = await response.text();
         console.error(`[Redirect Service] Measurement Protocol request failed with status ${response.status}: ${responseBody}`);
     } else {
-        console.log(`[Redirect Service] Successfully sent Measurement Protocol event for campaign: ${linkData.utmCampaign}`);
+        console.log(`[Redirect Service] Successfully sent 'session_start' event for campaign: ${linkData.utmCampaign}`);
     }
   } catch (error) {
     console.error('[Redirect Service] Failed to send Measurement Protocol event:', error);
@@ -87,7 +86,7 @@ export async function GET(
       console.log(`[Redirect Service] Found destination URL: ${linkData.destinationUrl}`);
       const apiSecret = await getMeasurementProtocolApiSecret();
       if (apiSecret) {
-        // Explicitly await the tracking event to ensure it completes before redirecting.
+        // We now wait for the tracking event to be sent before redirecting.
         await sendAnalyticsEvent(linkData, apiSecret);
       } else {
         console.warn("[Redirect Service] No API Secret for Measurement Protocol found. Skipping server-side tracking.");
@@ -104,3 +103,4 @@ export async function GET(
     return NextResponse.redirect(new URL('/', request.url));
   }
 }
+    
