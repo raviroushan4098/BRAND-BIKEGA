@@ -112,12 +112,14 @@ const fetchCampaignAnalyticsFlow = ai.defineFlow(
         },
       });
 
-      console.log(`[fetchCampaignAnalyticsFlow] GA API Response received for campaign ${campaignName}.`);
+      console.log(`[fetchCampaignAnalyticsFlow] GA API Response received for campaign ${campaignName}. Raw response header:`, JSON.stringify(response.dimensionHeaders, null, 2));
 
       if (!response.rows || response.rows.length === 0) {
-        console.log(`[fetchCampaignAnalyticsFlow] No data returned from GA for campaign: ${campaignName}`);
+        console.log(`[fetchCampaignAnalyticsFlow] No data returned from GA for campaign: ${campaignName}. This is a valid response if there are no visits for this campaign in the selected time range.`);
         return CampaignAnalyticsOutputSchema.parse({}); // Return default zero values
       }
+      
+      console.log(`[fetchCampaignAnalyticsFlow] Raw row data:`, JSON.stringify(response.rows[0], null, 2));
 
       // We expect only one row since we are filtering by a specific campaign name.
       const row = response.rows[0];
