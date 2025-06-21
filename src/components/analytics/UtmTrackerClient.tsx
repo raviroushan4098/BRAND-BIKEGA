@@ -83,21 +83,22 @@ export default function UtmTrackerClient() {
     fetchUsersForAdmin();
   }, [fetchUsersForAdmin]);
 
-  const fetchLinks = useCallback(async () => {
-    if (!currentTargetUserId) {
-        setLinks([]);
-        setIsLoading(false);
-        return;
-    }
-    setIsLoading(true);
-    const userLinks = await getUtmLinksForUser(currentTargetUserId);
-    setLinks(userLinks);
-    setIsLoading(false);
-  }, [currentTargetUserId]);
-
+  // Refactored data fetching logic to directly depend on currentTargetUserId
   useEffect(() => {
+    const fetchLinks = async () => {
+      if (!currentTargetUserId) {
+          setLinks([]);
+          setIsLoading(false);
+          return;
+      }
+      setIsLoading(true);
+      const userLinks = await getUtmLinksForUser(currentTargetUserId);
+      setLinks(userLinks);
+      setIsLoading(false);
+    };
+    
     fetchLinks();
-  }, [fetchLinks]);
+  }, [currentTargetUserId]);
   
   useEffect(() => {
     if (user?.role === 'admin') {
