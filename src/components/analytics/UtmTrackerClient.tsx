@@ -1,12 +1,15 @@
+
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Link2, Loader2, PlusCircle, Trash2, Copy } from 'lucide-react';
+import { Link2, Loader2, PlusCircle, Trash2, Copy, Users } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import type { UtmLink } from '@/lib/utmLinkService';
 import { addUtmLink, getUtmLinksForUser, deleteUtmLink } from '@/lib/utmLinkService';
+import type { User } from '@/lib/authService';
+import { getAllUsers as apiGetAllUsers } from '@/lib/authService';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -15,6 +18,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { format, parseISO, isValid } from 'date-fns';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 
 const utmFormSchema = z.object({
   baseUrl: z.string().url({ message: "Please enter a valid URL (e.g., https://example.com)." }),
@@ -32,6 +36,10 @@ export default function UtmTrackerClient() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [generatedUrl, setGeneratedUrl] = useState('');
+  
+  const [usersForAdminSelect, setUsersForAdminSelect] = useState<User[]>([]);
+  const [selectedUserIdForAdmin, setSelectedUserIdForAdmin] = useState<string>('');
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
 
   const form = useForm<UtmFormValues>({
     resolver: zodResolver(utmFormSchema),
@@ -45,14 +53,36 @@ export default function UtmTrackerClient() {
   });
 
   const { watch, handleSubmit, reset } = form;
+  const currentTargetUserId = user?.role === 'admin' ? selectedUserIdForAdmin : user?.id;
+
+  const fetchUsersForAdmin = useCallback(async () => {
+    if (user?.role === 'admin') {
+      setIsLoadingUsers(true);
+      try {
+        const fetchedUsers = await apiGetAllUsers();
+        setUsersForAdminSelect(fetchedUsers);
+      } catch (error) {
+        toast({ title: "Error", description: "Could not load users.", variant: "destructive" });
+      }
+      setIsLoadingUsers(false);
+    }
+  }, [user?.role, toast]);
+
+  useEffect(() => {
+    fetchUsersForAdmin();
+  }, [fetchUsersForAdmin]);
 
   const fetchLinks = useCallback(async () => {
-    if (!user) return;
+    if (!currentTargetUserId) {
+        setLinks([]);
+        setIsLoading(false);
+        return;
+    }
     setIsLoading(true);
-    const userLinks = await getUtmLinksForUser(user.id);
+    const userLinks = await getUtmLinksForUser(currentTargetUserId);
     setLinks(userLinks);
     setIsLoading(false);
-  }, [user]);
+  }, [currentTargetUserId]);
 
   useEffect(() => {
     fetchLinks();
@@ -80,14 +110,14 @@ export default function UtmTrackerClient() {
   }, [watch]);
 
   const onSubmit: SubmitHandler<UtmFormValues> = async (data) => {
-    if (!user) {
-      toast({ title: "Error", description: "You must be logged in.", variant: "destructive" });
+    if (!currentTargetUserId) {
+      toast({ title: "Error", description: "A user must be selected.", variant: "destructive" });
       return;
     }
     setIsSubmitting(true);
     const newLinkData = {
       ...data,
-      userId: user.id,
+      userId: currentTargetUserId,
       generatedUrl,
     };
     const newLink = await addUtmLink(newLinkData);
@@ -135,9 +165,41 @@ export default function UtmTrackerClient() {
         <Card className="lg:col-span-1 shadow-md">
           <CardHeader>
             <CardTitle>UTM Link Generator</CardTitle>
-            <CardDescription>Fill out the fields to create a new tracked link.</CardDescription>
+            <CardDescription>
+              {user?.role === 'admin' 
+                ? 'Select a user, then fill out the fields to create a tracked link.'
+                : 'Fill out the fields to create a new tracked link.'
+              }
+            </CardDescription>
           </CardHeader>
           <CardContent>
+            {user?.role === 'admin' && (
+              <div className="space-y-2 mb-4">
+                  <Label htmlFor="user-select-utm" className="flex items-center">
+                      <Users className="mr-2 h-4 w-4" /> Select User
+                  </Label>
+                  <Select
+                      value={selectedUserIdForAdmin}
+                      onValueChange={setSelectedUserIdForAdmin}
+                      disabled={isLoadingUsers}
+                  >
+                      <SelectTrigger id="user-select-utm">
+                          <SelectValue placeholder="Select a user to manage..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                          {isLoadingUsers ? (
+                              <SelectItem value="loading" disabled>Loading users...</SelectItem>
+                          ) : usersForAdminSelect.length > 0 ? (
+                              usersForAdminSelect.map(u => (
+                                  <SelectItem key={u.id} value={u.id}>{u.name} ({u.email})</SelectItem>
+                              ))
+                          ) : (
+                              <SelectItem value="no-users" disabled>No users available</SelectItem>
+                          )}
+                      </SelectContent>
+                  </Select>
+              </div>
+            )}
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               <div>
                 <Label htmlFor="baseUrl">Base URL</Label>
@@ -163,7 +225,7 @@ export default function UtmTrackerClient() {
                 <Label htmlFor="generatedUrl">Generated URL</Label>
                 <Input id="generatedUrl" value={generatedUrl} readOnly placeholder="Final URL will appear here..." className="bg-muted" />
               </div>
-              <Button type="submit" disabled={isSubmitting || !generatedUrl || form.formState.isSubmitting || !form.formState.isValid} className="w-full">
+              <Button type="submit" disabled={isSubmitting || !generatedUrl || form.formState.isSubmitting || !form.formState.isValid || !currentTargetUserId} className="w-full">
                 {isSubmitting ? <Loader2 className="animate-spin" /> : <PlusCircle className="mr-2"/>}
                 Save Link
               </Button>
@@ -174,13 +236,22 @@ export default function UtmTrackerClient() {
         <Card className="lg:col-span-2 shadow-md">
           <CardHeader>
             <CardTitle>Saved Links</CardTitle>
-            <CardDescription>Your previously generated UTM links.</CardDescription>
+            <CardDescription>
+              {user?.role === 'admin' && selectedUserIdForAdmin
+                  ? `Showing links for ${usersForAdminSelect.find(u => u.id === selectedUserIdForAdmin)?.name || 'the selected user'}.`
+                  : user?.role === 'admin' 
+                  ? 'Select a user to view their saved links.'
+                  : 'Your previously generated UTM links.'
+              }
+            </CardDescription>
           </CardHeader>
           <CardContent>
             {isLoading ? (
               <div className="flex justify-center items-center h-48">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
               </div>
+            ) : !currentTargetUserId && user?.role === 'admin' ? (
+                <p className="text-center text-muted-foreground py-10">Please select a user to view their links.</p>
             ) : links.length === 0 ? (
               <p className="text-center text-muted-foreground py-10">No links saved yet. Use the generator to create one.</p>
             ) : (
