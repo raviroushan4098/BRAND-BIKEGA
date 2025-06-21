@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Link2, Loader2, PlusCircle, Trash2, Copy, Users } from 'lucide-react';
+import { Link2, Loader2, PlusCircle, Trash2, Copy, Users, BarChartBig } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import type { UtmLink } from '@/lib/utmLinkService';
@@ -19,6 +19,9 @@ import * as z from 'zod';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { format, parseISO, isValid } from 'date-fns';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { fetchCampaignAnalytics, type CampaignAnalyticsOutput } from '@/ai/flows/fetch-ga-analytics-flow';
+import GaAnalyticsDisplay from './GaAnalyticsDisplay';
 
 const utmFormSchema = z.object({
   baseUrl: z.string().url({ message: "Please enter a valid URL (e.g., https://example.com)." }),
@@ -40,6 +43,14 @@ export default function UtmTrackerClient() {
   const [usersForAdminSelect, setUsersForAdminSelect] = useState<User[]>([]);
   const [selectedUserIdForAdmin, setSelectedUserIdForAdmin] = useState<string>('');
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+
+  const [gaPropertyId, setGaPropertyId] = useState('');
+  const [isAnalyticsDialogOpen, setIsAnalyticsDialogOpen] = useState(false);
+  const [currentAnalytics, setCurrentAnalytics] = useState<CampaignAnalyticsOutput | null>(null);
+  const [isAnalyticsLoading, setIsAnalyticsLoading] = useState(false);
+  const [analyticsError, setAnalyticsError] = useState<string | null>(null);
+  const [selectedCampaignForAnalytics, setSelectedCampaignForAnalytics] = useState<string>('');
+
 
   const form = useForm<UtmFormValues>({
     resolver: zodResolver(utmFormSchema),
@@ -92,7 +103,7 @@ export default function UtmTrackerClient() {
     const subscription = watch((values) => {
       const { baseUrl, utmSource, utmMedium, utmCampaign } = values;
       try {
-        new URL(baseUrl || "https://example.com"); // check if base is a valid url structure
+        new URL(baseUrl || "https://example.com");
         if (baseUrl && utmSource && utmMedium && utmCampaign) {
           const url = new URL(baseUrl);
           url.searchParams.set('utm_source', utmSource);
@@ -146,6 +157,32 @@ export default function UtmTrackerClient() {
     navigator.clipboard.writeText(text);
     toast({ title: "Copied!", description: "UTM link copied to clipboard." });
   };
+  
+  const handleFetchAnalytics = async (campaignName: string) => {
+    if (!gaPropertyId) {
+      toast({ title: "Missing ID", description: "Please enter your Google Analytics Property ID first.", variant: "destructive" });
+      return;
+    }
+    setIsAnalyticsLoading(true);
+    setCurrentAnalytics(null);
+    setAnalyticsError(null);
+    setSelectedCampaignForAnalytics(campaignName);
+    setIsAnalyticsDialogOpen(true);
+
+    try {
+        const result = await fetchCampaignAnalytics({ propertyId: gaPropertyId, campaignName });
+        if (result.error) {
+          setAnalyticsError(result.error);
+        } else {
+          setCurrentAnalytics(result);
+        }
+    } catch (e: any) {
+        setAnalyticsError(e.message || "An unexpected error occurred.");
+    } finally {
+        setIsAnalyticsLoading(false);
+    }
+  };
+
 
   return (
     <>
@@ -156,9 +193,22 @@ export default function UtmTrackerClient() {
             <CardTitle className="text-3xl font-bold">UTM Link Tracker</CardTitle>
           </div>
           <CardDescription>
-            Create and manage UTM-tagged links to track your campaign performance in analytics tools like Google Analytics.
+            Create and manage UTM-tagged links. Connect to Google Analytics to see campaign performance.
           </CardDescription>
         </CardHeader>
+        <CardContent>
+            <Label htmlFor="gaPropertyId">Google Analytics Property ID</Label>
+            <Input 
+                id="gaPropertyId" 
+                placeholder="Enter your GA4 Property ID..."
+                value={gaPropertyId}
+                onChange={(e) => setGaPropertyId(e.target.value)}
+                className="max-w-sm mt-1"
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+                Required to fetch campaign analytics. You can find this ID in your GA4 admin settings.
+            </p>
+        </CardContent>
       </Card>
 
       <div className="grid gap-8 lg:grid-cols-3">
@@ -276,8 +326,9 @@ export default function UtmTrackerClient() {
                         </TableCell>
                         <TableCell>{isValid(parseISO(link.createdAt)) ? format(parseISO(link.createdAt), 'MMM d, yyyy') : 'N/A'}</TableCell>
                         <TableCell className="text-right space-x-1">
-                          <Button variant="outline" size="sm" onClick={() => copyToClipboard(link.generatedUrl)}><Copy className="mr-2 h-3 w-3"/>Copy</Button>
-                          <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDelete(link.id)}><Trash2 className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="icon" onClick={() => handleFetchAnalytics(link.utmCampaign)} title="View Analytics"><BarChartBig className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="icon" onClick={() => copyToClipboard(link.generatedUrl)} title="Copy Link"><Copy className="h-4 w-4"/></Button>
+                          <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDelete(link.id)} title="Delete Link"><Trash2 className="h-4 w-4" /></Button>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -288,6 +339,23 @@ export default function UtmTrackerClient() {
           </CardContent>
         </Card>
       </div>
+      <Dialog open={isAnalyticsDialogOpen} onOpenChange={setIsAnalyticsDialogOpen}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>Campaign Analytics: "{selectedCampaignForAnalytics}"</DialogTitle>
+                <DialogDescription>
+                    Displaying data from Google Analytics for this campaign.
+                </DialogDescription>
+            </DialogHeader>
+            <GaAnalyticsDisplay
+                analytics={currentAnalytics}
+                isLoading={isAnalyticsLoading}
+                error={analyticsError}
+                campaignName={selectedCampaignForAnalytics}
+                onRetry={() => handleFetchAnalytics(selectedCampaignForAnalytics)}
+            />
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
