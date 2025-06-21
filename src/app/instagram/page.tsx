@@ -8,6 +8,7 @@ import type { StoredInstagramPost } from '@/lib/instagramPostAnalyticsService';
 import {
   saveInstagramPostAnalytics,
   getAllInstagramPostAnalyticsForUser,
+  deleteInstagramPostAnalytics,
 } from '@/lib/instagramPostAnalyticsService';
 import { fetchInstagramReelStats, type FetchInstagramReelStatsInput, type InstagramReelStatsOutput } from '@/ai/flows/fetch-instagram-reel-stats-flow';
 
@@ -642,12 +643,20 @@ export default function InstagramAnalyticsPage() {
     const success = await deleteInstagramLinkForUser(selectedUserIdForAdmin, linkToDelete);
     if (success) {
       toast({ title: "Link Deleted", description: `Link "${linkToDelete.substring(0, 30)}..." removed.` });
-      await fetchAssignedLinksForDialog(); 
-
+      
       const shortcodeToDelete = extractShortcodeFromUrlSafe(linkToDelete);
       if (shortcodeToDelete) {
-        setAllFetchedPosts(prev => prev.filter(p => p.id !== shortcodeToDelete));
+        const analyticsDeleted = await deleteInstagramPostAnalytics(selectedUserIdForAdmin, shortcodeToDelete);
+        if (analyticsDeleted) {
+          setAllFetchedPosts(prev => prev.filter(p => p.id !== shortcodeToDelete));
+          toast({ title: "Analytics Data Removed", description: `Associated data for post ${shortcodeToDelete} has been deleted.`});
+        } else {
+          toast({ title: "Deletion Warning", description: `Link was removed, but failed to delete associated analytics data for post ${shortcodeToDelete}.`, variant: "destructive"});
+        }
       }
+      
+      await fetchAssignedLinksForDialog(); 
+
     } else {
       toast({ title: "Error", description: "Failed to delete link.", variant: "destructive" });
     }
@@ -742,7 +751,7 @@ export default function InstagramAnalyticsPage() {
                     <DialogTitle>Assigned Instagram Reel Links</DialogTitle>
                     <DialogDescription>
                       Manage links for {usersForAdminSelect.find(u => u.id === selectedUserIdForAdmin)?.name || 'the selected user'}.
-                      Deleting a link here will remove it from tracking.
+                      Deleting a link here will remove it from tracking and delete its data.
                     </DialogDescription>
                   </DialogHeader>
                   <div className="my-4">
@@ -946,4 +955,3 @@ export default function InstagramAnalyticsPage() {
     </AppLayout>
   );
 }
-

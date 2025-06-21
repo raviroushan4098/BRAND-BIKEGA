@@ -11,7 +11,8 @@ import {
   writeBatch,
   Timestamp,
   query,
-  orderBy
+  orderBy,
+  deleteDoc,
 } from 'firebase/firestore';
 import type { YouTubeVideo } from './mockData'; // Assuming YouTubeVideo defines the structure
 
@@ -93,6 +94,28 @@ export const getVideoAnalytics = async (userId: string, videoId: string): Promis
   } catch (error) {
     console.error(`Error fetching video analytics for video ${videoId} of user ${userId}:`, error);
     return null;
+  }
+};
+
+/**
+ * Deletes a single YouTube video's analytics data from Firestore.
+ * @param userId The ID of the user.
+ * @param videoId The ID of the video to delete.
+ * @returns True if deletion was successful, false otherwise.
+ */
+export const deleteVideoAnalytics = async (userId: string, videoId: string): Promise<boolean> => {
+  if (!userId || !videoId) {
+    console.error("User ID and Video ID are required for deletion.");
+    return false;
+  }
+  try {
+    const videoDocRef = doc(db, 'userVideoAnalytics', userId, 'videos', videoId);
+    await deleteDoc(videoDocRef);
+    console.log(`Successfully deleted video analytics for video ${videoId} of user ${userId}.`);
+    return true;
+  } catch (error) {
+    console.error(`Error deleting video analytics for video ${videoId} of user ${userId}:`, error);
+    return false;
   }
 };
 

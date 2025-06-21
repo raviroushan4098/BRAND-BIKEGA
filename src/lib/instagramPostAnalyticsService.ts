@@ -10,7 +10,8 @@ import {
   getDocs,
   writeBatch,
   query,
-  orderBy
+  orderBy,
+  deleteDoc,
 } from 'firebase/firestore';
 
 // Interface for stored Instagram post analytics
@@ -121,6 +122,29 @@ export const getInstagramPostAnalytics = async (userId: string, postId: string):
     return null;
   }
 };
+
+/**
+ * Deletes a single Instagram post's analytics data from Firestore.
+ * @param userId The ID of the user.
+ * @param postId The ID (shortcode) of the post to delete.
+ * @returns True if deletion was successful, false otherwise.
+ */
+export const deleteInstagramPostAnalytics = async (userId: string, postId: string): Promise<boolean> => {
+  if (!userId || !postId) {
+    console.error("[InstagramService] User ID and Post ID (shortcode) are required for deletion.");
+    return false;
+  }
+  try {
+    const postDocRef = doc(db, 'userInstagramPostAnalytics', userId, 'posts', postId);
+    await deleteDoc(postDocRef);
+    console.log(`[InstagramService] Successfully deleted post analytics for post ${postId} of user ${userId}.`);
+    return true;
+  } catch (error) {
+    console.error(`[InstagramService] Error deleting post analytics for post ${postId} of user ${userId}:`, error);
+    return false;
+  }
+};
+
 
 /**
  * Batch saves multiple Instagram post analytics data to Firestore for a specific user.

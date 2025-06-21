@@ -24,6 +24,7 @@ import { generateChannelAnalyticsReport, type ChannelAnalyticsReportOutput, type
 import {
   saveVideoAnalytics,
   getAllVideoAnalyticsForUser,
+  deleteVideoAnalytics,
   type StoredYouTubeVideo,
 } from '@/lib/youtubeVideoAnalyticsService';
 import { toast } from '@/hooks/use-toast';
@@ -546,12 +547,20 @@ export default function YouTubeManagementPage() {
     const success = await deleteYouTubeLinkForUser(selectedUserIdForAdmin, linkToDelete);
     if (success) {
       toast({ title: "Link Deleted", description: `YouTube link "${linkToDelete.substring(0, 30)}..." removed.` });
-      await fetchAssignedLinksForDialog(); 
-
+      
       const videoIdToDelete = extractYouTubeVideoId(linkToDelete);
       if (videoIdToDelete) {
-        setAllFetchedVideos(prev => prev.filter(v => v.id !== videoIdToDelete));
+        const analyticsDeleted = await deleteVideoAnalytics(selectedUserIdForAdmin, videoIdToDelete);
+        if (analyticsDeleted) {
+          setAllFetchedVideos(prev => prev.filter(v => v.id !== videoIdToDelete));
+          toast({ title: "Analytics Data Removed", description: `Associated data for video ${videoIdToDelete} has been deleted.`});
+        } else {
+          toast({ title: "Deletion Warning", description: `Link was removed, but failed to delete associated analytics data for video ${videoIdToDelete}.`, variant: "destructive"});
+        }
       }
+      
+      await fetchAssignedLinksForDialog(); 
+
     } else {
       toast({ title: "Error", description: "Failed to delete YouTube link.", variant: "destructive" });
     }
@@ -656,7 +665,7 @@ export default function YouTubeManagementPage() {
                     <DialogTitle>Assigned YouTube Links</DialogTitle>
                     <DialogDescription>
                       Manage YouTube links for {usersForAdminSelect.find(u => u.id === selectedUserIdForAdmin)?.name || 'the selected user'}.
-                      Deleting a link here will remove it from tracking and remove any fetched data for that video.
+                      Deleting a link here will remove it from tracking and delete its data.
                     </DialogDescription>
                   </DialogHeader>
                   <div className="my-4">
@@ -858,4 +867,3 @@ export default function YouTubeManagementPage() {
     </AppLayout>
   );
 }
-
