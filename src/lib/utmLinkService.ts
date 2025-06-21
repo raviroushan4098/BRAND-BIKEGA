@@ -53,7 +53,7 @@ export const getUtmLinksForUser = async (userId: string): Promise<UtmLink[]> => 
     return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as UtmLink));
   } catch (error) {
     console.error("Error fetching UTM links: ", error);
-    return [];
+    throw error; // Re-throw the error to be caught by the calling component
   }
 };
 

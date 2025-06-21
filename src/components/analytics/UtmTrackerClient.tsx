@@ -37,6 +37,7 @@ export default function UtmTrackerClient() {
   const { toast } = useToast();
   const [links, setLinks] = useState<UtmLink[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [generatedUrl, setGeneratedUrl] = useState('');
   
@@ -87,14 +88,26 @@ export default function UtmTrackerClient() {
   useEffect(() => {
     const fetchLinks = async () => {
       if (!currentTargetUserId) {
-          setLinks([]);
-          setIsLoading(false);
-          return;
+        setLinks([]);
+        setIsLoading(false);
+        setFetchError(null);
+        return;
       }
       setIsLoading(true);
-      const userLinks = await getUtmLinksForUser(currentTargetUserId);
-      setLinks(userLinks);
-      setIsLoading(false);
+      setFetchError(null);
+      try {
+        const userLinks = await getUtmLinksForUser(currentTargetUserId);
+        setLinks(userLinks);
+      } catch (error: any) {
+        console.error(error);
+        const errorMessage = error.message?.includes('firestore/failed-precondition') 
+          ? "Query failed. Please check your browser's developer console for a link to create the required Firestore index."
+          : "Failed to fetch links. Please try again later.";
+        setFetchError(errorMessage);
+        setLinks([]);
+      } finally {
+        setIsLoading(false);
+      }
     };
     
     fetchLinks();
@@ -334,6 +347,8 @@ export default function UtmTrackerClient() {
               <div className="flex justify-center items-center h-48">
                 <Loader2 className="h-8 w-8 animate-spin text-primary" />
               </div>
+            ) : fetchError ? (
+              <p className="text-center text-destructive py-10">{fetchError}</p>
             ) : !currentTargetUserId && user?.role === 'admin' ? (
                 <p className="text-center text-muted-foreground py-10">Please select a user to view their links.</p>
             ) : links.length === 0 ? (
