@@ -60,6 +60,28 @@ interface SummaryStats {
 
 type SortableVideoKey = 'publishedAt' | 'views' | 'likes' | 'comments' | 'title';
 
+const extractYouTubeVideoId = (url: string): string | null => {
+  if (!url) return null;
+  let videoId: string | null = null;
+  try {
+    const urlObj = new URL(url);
+    if (urlObj.hostname === 'youtu.be') {
+      videoId = urlObj.pathname.slice(1).split(/[?&]/)[0];
+    } else if (urlObj.hostname.includes('youtube.com')) {
+      if (urlObj.pathname.startsWith('/embed/')) {
+        videoId = urlObj.pathname.split('/embed/')[1].split(/[?&]/)[0];
+      } else if (urlObj.pathname.startsWith('/watch')) {
+        videoId = urlObj.searchParams.get('v');
+      } else if (urlObj.pathname.startsWith('/shorts/')) {
+        videoId = urlObj.pathname.split('/shorts/')[1].split(/[?&]/)[0];
+      }
+    }
+    if (videoId && videoId.includes('&')) videoId = videoId.split('&')[0];
+    if (videoId && videoId.includes('?')) videoId = videoId.split('?')[0];
+  } catch (e) { return null; }
+  return videoId;
+};
+
 export default function YouTubeManagementPage() {
   const { user } = useAuth();
   
@@ -133,28 +155,6 @@ export default function YouTubeManagementPage() {
   useEffect(() => {
     fetchUsersForAdmin();
   }, [fetchUsersForAdmin]);
-
-  const extractYouTubeVideoId = (url: string): string | null => {
-    if (!url) return null;
-    let videoId = null;
-    try {
-      const urlObj = new URL(url);
-      if (urlObj.hostname === 'youtu.be') {
-        videoId = urlObj.pathname.slice(1).split(/[?&]/)[0];
-      } else if (urlObj.hostname.includes('youtube.com')) {
-        if (urlObj.pathname.startsWith('/embed/')) {
-          videoId = urlObj.pathname.split('/embed/')[1].split(/[?&]/)[0];
-        } else if (urlObj.pathname.startsWith('/watch')) {
-          videoId = urlObj.searchParams.get('v');
-        } else if (urlObj.pathname.startsWith('/shorts/')) {
-          videoId = urlObj.pathname.split('/shorts/')[1].split(/[?&]/)[0];
-        }
-      }
-      if (videoId && videoId.includes('&')) videoId = videoId.split('&')[0];
-      if (videoId && videoId.includes('?')) videoId = videoId.split('?')[0];
-    } catch (e) { return null; }
-    return videoId;
-  };
   
   const loadInitialUserVideos = useCallback(async (userIdToFetch: string) => {
     if (!userIdToFetch) {
@@ -166,12 +166,30 @@ export default function YouTubeManagementPage() {
     setIsLoadingVideos(true);
     setFetchError(null);
     try {
-      const storedVideos = await getAllVideoAnalyticsForUser(userIdToFetch);
-      if (storedVideos.length > 0) {
-        setAllFetchedVideos(storedVideos);
-      } else {
-        setAllFetchedVideos([]);
+      // 1. Get assigned links and their video IDs
+      const { links: assignedLinks } = await getYouTubeLinksForUser(userIdToFetch);
+      const validVideoIds = new Set(assignedLinks.map(extractYouTubeVideoId).filter((id): id is string => id !== null));
+      
+      // 2. Get all stored analytics data
+      const allStoredVideos = await getAllVideoAnalyticsForUser(userIdToFetch);
+
+      // 3. Filter displayed videos and identify stale data
+      const videosToDisplay = allStoredVideos.filter(video => video.id && validVideoIds.has(video.id));
+      const staleVideos = allStoredVideos.filter(video => video.id && !validVideoIds.has(video.id));
+
+      setAllFetchedVideos(videosToDisplay);
+
+      // 4. (Async) Clean up stale videos from Firestore
+      if (staleVideos.length > 0) {
+        console.log(`Found ${staleVideos.length} stale YouTube videos to clean up.`);
+        const cleanupPromises = staleVideos.map(video => video.id ? deleteVideoAnalytics(userIdToFetch, video.id) : Promise.resolve());
+        await Promise.all(cleanupPromises).then(() => {
+          console.log("Stale video cleanup complete.");
+        }).catch(err => {
+          console.error("Error during stale video cleanup:", err);
+        });
       }
+
     } catch (error: any) {
       console.error("Error loading videos from Firestore:", error);
       setFetchError("Could not load video data from storage. Please try refreshing.");
@@ -545,16 +563,19 @@ export default function YouTubeManagementPage() {
     if (!selectedUserIdForAdmin) return;
     setDeletingLinkId(linkToDelete);
 
+    // Optimistically update the UI first
+    const videoIdToDelete = extractYouTubeVideoId(linkToDelete);
+    if (videoIdToDelete) {
+      setAllFetchedVideos(prev => prev.filter(v => v.id !== videoIdToDelete));
+    }
+
+    // Then perform the async operations
     const linkDeletionSuccess = await deleteYouTubeLinkForUser(selectedUserIdForAdmin, linkToDelete);
     
     if (linkDeletionSuccess) {
       toast({ title: "Link Deleted", description: `YouTube link "${linkToDelete.substring(0, 30)}..." removed.` });
       
-      const videoIdToDelete = extractYouTubeVideoId(linkToDelete);
       if (videoIdToDelete) {
-        // Optimistically update the UI by removing the video from the local state immediately.
-        setAllFetchedVideos(prev => prev.filter(v => v.id !== videoIdToDelete));
-        
         // Asynchronously delete the analytics data from Firestore.
         deleteVideoAnalytics(selectedUserIdForAdmin, videoIdToDelete).then(analyticsDeleted => {
           if (analyticsDeleted) {
@@ -567,7 +588,9 @@ export default function YouTubeManagementPage() {
       
       await fetchAssignedLinksForDialog(); 
     } else {
-      toast({ title: "Error", description: "Failed to delete YouTube link from the user's list.", variant: "destructive" });
+      toast({ title: "Error", description: "Failed to delete YouTube link. Reverting UI change.", variant: "destructive" });
+      // Revert UI change if deletion fails
+      await loadInitialUserVideos(selectedUserIdForAdmin);
     }
     
     setDeletingLinkId(null);

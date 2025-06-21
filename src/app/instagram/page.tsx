@@ -74,6 +74,17 @@ interface SummaryStats {
 
 type SortablePostKey = 'postedAt' | 'likes' | 'comments' | 'playCount' | 'reshareCount';
 
+const extractShortcodeFromUrlSafe = (url: string): string | null => {
+  try {
+    const urlObj = new URL(url);
+    const regex = /\/(?:p|reel|reels)\/([a-zA-Z0-9_-]+)/;
+    const match = urlObj.pathname.match(regex);
+    return match && match[1] ? match[1] : null;
+  } catch (e) {
+    return null;
+  }
+};
+
 export default function InstagramAnalyticsPage() {
   const { user } = useAuth();
   
@@ -146,17 +157,6 @@ export default function InstagramAnalyticsPage() {
   useEffect(() => {
     fetchUsersForAdmin();
   }, [fetchUsersForAdmin]);
-
-  const extractShortcodeFromUrlSafe = (url: string): string | null => {
-    try {
-      const urlObj = new URL(url);
-      const regex = /\/(?:p|reel|reels)\/([a-zA-Z0-9_-]+)/;
-      const match = urlObj.pathname.match(regex);
-      return match && match[1] ? match[1] : null;
-    } catch (e) {
-      return null;
-    }
-  };
   
   const loadInitialUserPosts = useCallback(async (userIdToFetch: string) => {
     if (!userIdToFetch) {
@@ -169,8 +169,30 @@ export default function InstagramAnalyticsPage() {
     setIsLoadingPosts(true);
     setFetchError(null);
     try {
-      const storedPosts = await getAllInstagramPostAnalyticsForUser(userIdToFetch);
-      setAllFetchedPosts(storedPosts);
+      // 1. Get assigned links and their shortcodes
+      const { links: assignedLinks } = await getInstagramLinksForUser(userIdToFetch);
+      const validShortcodes = new Set(assignedLinks.map(extractShortcodeFromUrlSafe).filter((id): id is string => id !== null));
+
+      // 2. Get all stored analytics data
+      const allStoredPosts = await getAllInstagramPostAnalyticsForUser(userIdToFetch);
+
+      // 3. Filter displayed posts and identify stale data
+      const postsToDisplay = allStoredPosts.filter(post => post.id && validShortcodes.has(post.id));
+      const stalePosts = allStoredPosts.filter(post => post.id && !validShortcodes.has(post.id));
+
+      setAllFetchedPosts(postsToDisplay);
+      
+      // 4. (Async) Clean up stale posts from Firestore
+      if (stalePosts.length > 0) {
+        console.log(`Found ${stalePosts.length} stale Instagram posts to clean up.`);
+        const cleanupPromises = stalePosts.map(post => post.id ? deleteInstagramPostAnalytics(userIdToFetch, post.id) : Promise.resolve());
+        await Promise.all(cleanupPromises).then(() => {
+          console.log("Stale post cleanup complete.");
+        }).catch(err => {
+          console.error("Error during stale post cleanup:", err);
+        });
+      }
+
     } catch (error: any) {
       console.error("Error loading Instagram posts from Firestore:", error);
       setFetchError("Could not load post data from storage. Please try refreshing.");
@@ -640,18 +662,21 @@ export default function InstagramAnalyticsPage() {
   const handleDeleteAssignedLink = async (linkToDelete: string) => {
     if (!selectedUserIdForAdmin) return;
     setDeletingLinkId(linkToDelete);
+
+    // Optimistically update the UI first
+    const shortcodeToDelete = extractShortcodeFromUrlSafe(linkToDelete);
+    if (shortcodeToDelete) {
+      setAllFetchedPosts(prev => prev.filter(p => p.id !== shortcodeToDelete));
+    }
     
+    // Then perform the async operations
     const linkDeletionSuccess = await deleteInstagramLinkForUser(selectedUserIdForAdmin, linkToDelete);
     
     if (linkDeletionSuccess) {
       toast({ title: "Link Deleted", description: `Link "${linkToDelete.substring(0, 30)}..." removed.` });
       
-      const shortcodeToDelete = extractShortcodeFromUrlSafe(linkToDelete);
+      // Asynchronously delete the analytics data from Firestore.
       if (shortcodeToDelete) {
-        // Optimistically update the UI by removing the post from the local state immediately.
-        setAllFetchedPosts(prev => prev.filter(p => p.id !== shortcodeToDelete));
-        
-        // Asynchronously delete the analytics data from Firestore.
         deleteInstagramPostAnalytics(selectedUserIdForAdmin, shortcodeToDelete).then(analyticsDeleted => {
           if (analyticsDeleted) {
             toast({ title: "Analytics Data Removed", description: `Associated data for post ${shortcodeToDelete} has been deleted.`});
@@ -663,7 +688,9 @@ export default function InstagramAnalyticsPage() {
       
       await fetchAssignedLinksForDialog(); 
     } else {
-      toast({ title: "Error", description: "Failed to delete link from the user's list.", variant: "destructive" });
+      toast({ title: "Error", description: "Failed to delete link. Reverting UI change.", variant: "destructive" });
+      // Revert UI change if deletion fails
+      await loadInitialUserPosts(selectedUserIdForAdmin);
     }
     
     setDeletingLinkId(null);
