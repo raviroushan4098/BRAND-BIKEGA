@@ -47,6 +47,25 @@ interface StoredInstagramPost {
   errorMessage?: string;
 }
 
+// Type for YouTube API video item
+interface YouTubeApiItem {
+  id: string;
+  snippet: {
+    title: string;
+    description: string;
+    publishedAt: string;
+    thumbnails: {
+      high?: { url: string };
+      medium?: { url: string };
+    };
+  };
+  statistics: {
+    viewCount: string;
+    likeCount?: string;
+    commentCount?: string;
+  };
+}
+
 
 // --- Firestore & API Helper Functions ---
 
@@ -87,7 +106,7 @@ async function getAllUsers(): Promise<User[]> {
   const users: User[] = [];
   try {
     const usersSnapshot = await db.collection('users').get();
-    usersSnapshot.forEach((doc) => {
+    usersSnapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
       users.push({ id: doc.id, ...doc.data() } as User);
     });
   } catch (error) {
@@ -181,7 +200,7 @@ async function getVideoStatistics(videoIds: string[], apiKey: string): Promise<P
             return []; // Return empty on API error to not halt the entire process
         }
         const data = await response.json();
-        return data.items.map((item: any) => ({
+        return data.items.map((item: YouTubeApiItem) => ({
             id: item.id,
             title: item.snippet.title,
             description: item.snippet.description,
@@ -207,6 +226,7 @@ async function saveVideoAnalytics(userId: string, videoData: Partial<YouTubeVide
     const videoDocRef = db.collection('userVideoAnalytics').doc(userId).collection('videos').doc(videoData.id);
     const dataToSave: StoredYouTubeVideo = {
         ...videoData,
+        id: videoData.id,
         lastFetched: new Date().toISOString(),
     };
     await videoDocRef.set(dataToSave, { merge: true });
@@ -275,11 +295,12 @@ async function saveInstagramPostAnalytics(userId: string, postData: Partial<Stor
     if (!userId || !postData || !postData.id) return;
     const postDocRef = db.collection('userInstagramPostAnalytics').doc(userId).collection('posts').doc(postData.id);
     const dataToSave: StoredInstagramPost = {
+        reelUrl: '',
+        likes: 0,
+        comments: 0,
+        playCount: 0,
         ...postData,
-        reelUrl: postData.reelUrl || '', // Ensure reelUrl is not undefined
-        likes: postData.likes || 0,
-        comments: postData.comments || 0,
-        playCount: postData.playCount || 0,
+        id: postData.id,
         lastFetched: new Date().toISOString(),
     };
     await postDocRef.set(dataToSave, { merge: true });
@@ -295,7 +316,7 @@ export const dailyDataRefresh = functions
     .runWith({timeoutSeconds: 540, memory: "1GB"})
     .pubsub.schedule("every day 03:00")
     .timeZone("America/Los_Angeles")
-    .onRun(async (context) => {
+    .onRun(async (context: functions.EventContext) => {
         console.log("Daily data refresh job started!");
 
         const apiKeys = await getApiKeys();
@@ -363,4 +384,3 @@ export const dailyDataRefresh = functions
         console.log("Daily data refresh job finished.");
         return null;
     });
-
