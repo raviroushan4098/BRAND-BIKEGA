@@ -640,26 +640,32 @@ export default function InstagramAnalyticsPage() {
   const handleDeleteAssignedLink = async (linkToDelete: string) => {
     if (!selectedUserIdForAdmin) return;
     setDeletingLinkId(linkToDelete);
-    const success = await deleteInstagramLinkForUser(selectedUserIdForAdmin, linkToDelete);
-    if (success) {
+    
+    const linkDeletionSuccess = await deleteInstagramLinkForUser(selectedUserIdForAdmin, linkToDelete);
+    
+    if (linkDeletionSuccess) {
       toast({ title: "Link Deleted", description: `Link "${linkToDelete.substring(0, 30)}..." removed.` });
       
       const shortcodeToDelete = extractShortcodeFromUrlSafe(linkToDelete);
       if (shortcodeToDelete) {
-        const analyticsDeleted = await deleteInstagramPostAnalytics(selectedUserIdForAdmin, shortcodeToDelete);
-        if (analyticsDeleted) {
-          setAllFetchedPosts(prev => prev.filter(p => p.id !== shortcodeToDelete));
-          toast({ title: "Analytics Data Removed", description: `Associated data for post ${shortcodeToDelete} has been deleted.`});
-        } else {
-          toast({ title: "Deletion Warning", description: `Link was removed, but failed to delete associated analytics data for post ${shortcodeToDelete}.`, variant: "destructive"});
-        }
+        // Optimistically update the UI by removing the post from the local state immediately.
+        setAllFetchedPosts(prev => prev.filter(p => p.id !== shortcodeToDelete));
+        
+        // Asynchronously delete the analytics data from Firestore.
+        deleteInstagramPostAnalytics(selectedUserIdForAdmin, shortcodeToDelete).then(analyticsDeleted => {
+          if (analyticsDeleted) {
+            toast({ title: "Analytics Data Removed", description: `Associated data for post ${shortcodeToDelete} has been deleted.`});
+          } else {
+            toast({ title: "Deletion Warning", description: `Link was removed, but failed to delete associated analytics data for post ${shortcodeToDelete}. It may reappear on next refresh.`, variant: "destructive"});
+          }
+        });
       }
       
       await fetchAssignedLinksForDialog(); 
-
     } else {
-      toast({ title: "Error", description: "Failed to delete link.", variant: "destructive" });
+      toast({ title: "Error", description: "Failed to delete link from the user's list.", variant: "destructive" });
     }
+    
     setDeletingLinkId(null);
   };
   

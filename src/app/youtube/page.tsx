@@ -544,26 +544,32 @@ export default function YouTubeManagementPage() {
   const handleDeleteAssignedLink = async (linkToDelete: string) => {
     if (!selectedUserIdForAdmin) return;
     setDeletingLinkId(linkToDelete);
-    const success = await deleteYouTubeLinkForUser(selectedUserIdForAdmin, linkToDelete);
-    if (success) {
+
+    const linkDeletionSuccess = await deleteYouTubeLinkForUser(selectedUserIdForAdmin, linkToDelete);
+    
+    if (linkDeletionSuccess) {
       toast({ title: "Link Deleted", description: `YouTube link "${linkToDelete.substring(0, 30)}..." removed.` });
       
       const videoIdToDelete = extractYouTubeVideoId(linkToDelete);
       if (videoIdToDelete) {
-        const analyticsDeleted = await deleteVideoAnalytics(selectedUserIdForAdmin, videoIdToDelete);
-        if (analyticsDeleted) {
-          setAllFetchedVideos(prev => prev.filter(v => v.id !== videoIdToDelete));
-          toast({ title: "Analytics Data Removed", description: `Associated data for video ${videoIdToDelete} has been deleted.`});
-        } else {
-          toast({ title: "Deletion Warning", description: `Link was removed, but failed to delete associated analytics data for video ${videoIdToDelete}.`, variant: "destructive"});
-        }
+        // Optimistically update the UI by removing the video from the local state immediately.
+        setAllFetchedVideos(prev => prev.filter(v => v.id !== videoIdToDelete));
+        
+        // Asynchronously delete the analytics data from Firestore.
+        deleteVideoAnalytics(selectedUserIdForAdmin, videoIdToDelete).then(analyticsDeleted => {
+          if (analyticsDeleted) {
+            toast({ title: "Analytics Data Removed", description: `Associated data for video ${videoIdToDelete} has been deleted.`});
+          } else {
+            toast({ title: "Cleanup Warning", description: `Failed to delete associated analytics data for video ${videoIdToDelete}. It may reappear on next refresh.`, variant: "destructive"});
+          }
+        });
       }
       
       await fetchAssignedLinksForDialog(); 
-
     } else {
-      toast({ title: "Error", description: "Failed to delete YouTube link.", variant: "destructive" });
+      toast({ title: "Error", description: "Failed to delete YouTube link from the user's list.", variant: "destructive" });
     }
+    
     setDeletingLinkId(null);
   };
   
