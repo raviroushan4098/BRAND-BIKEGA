@@ -4,7 +4,7 @@
 import { CampaignAnalyticsOutput } from '@/ai/flows/fetch-ga-analytics-flow';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, AlertTriangle, BarChart2, CheckCircle, Percent, Lightbulb } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Button } from '../ui/button';
 
 interface GaAnalyticsDisplayProps {
   analytics: CampaignAnalyticsOutput | null;
@@ -51,10 +51,26 @@ const GaAnalyticsDisplay: React.FC<GaAnalyticsDisplayProps> = ({ analytics, isLo
 
   if (!analytics || (analytics.sessions === 0 && !analytics.error)) {
     return (
-      <div className="p-6 text-center text-sm text-muted-foreground min-h-[300px] flex flex-col items-center justify-center">
-         <CardTitle className="text-lg font-semibold mb-2">No Activity Found</CardTitle>
-        <p>No analytics data was found for the campaign "{campaignName}" in the last 90 days.</p>
-        {analytics.aiSummary && <p className="mt-4 italic text-xs">AI Summary: {analytics.aiSummary}</p>}
+      <div className="p-6 text-center min-h-[300px] flex flex-col items-center justify-center">
+        <CardTitle className="text-lg font-semibold mb-2">No Activity Found</CardTitle>
+        <p className="text-sm text-muted-foreground">
+            No analytics data was found for the campaign "{campaignName}" in the last 90 days.
+        </p>
+        
+        {analytics.aiSummary && (
+            <p className="mt-4 italic text-xs bg-muted p-2 rounded-md w-full">
+                AI Summary: {analytics.aiSummary}
+            </p>
+        )}
+
+        <div className="mt-6 text-xs text-left text-muted-foreground border-t pt-4 w-full">
+            <h4 className="font-semibold text-center mb-2">Common Reasons for No Data:</h4>
+            <ul className="list-disc list-inside space-y-1">
+                <li><strong>Timing:</strong> It can take several hours (up to 24) for new visits to appear in Google Analytics.</li>
+                <li><strong>No Visits:</strong> The link may not have been visited yet. Try visiting it in an incognito window.</li>
+                <li><strong>GA Setup:</strong> Ensure the Google Analytics tracking code is correctly installed on the destination website.</li>
+            </ul>
+        </div>
       </div>
     );
   }
