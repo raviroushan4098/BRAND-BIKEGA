@@ -87,8 +87,8 @@ export async function GET(
       console.log(`[Redirect Service] Found destination URL: ${linkData.destinationUrl}`);
       const apiSecret = await getMeasurementProtocolApiSecret();
       if (apiSecret) {
-        // Fire-and-forget the analytics event, don't wait for it to complete
-        sendAnalyticsEvent(linkData, apiSecret);
+        // Explicitly await the tracking event to ensure it completes before redirecting.
+        await sendAnalyticsEvent(linkData, apiSecret);
       } else {
         console.warn("[Redirect Service] No API Secret for Measurement Protocol found. Skipping server-side tracking.");
       }
