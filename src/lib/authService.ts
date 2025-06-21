@@ -13,6 +13,7 @@ export interface User {
   name: string;
   lastLogin: string; // ISO string
   trackedChannels?: { youtube?: string[]; instagram?: string[] };
+  gaPropertyId?: string; // Google Analytics Property ID
 }
 
 // Fetch user profile from Firestore by email (for direct login)
@@ -131,6 +132,18 @@ export const adminDeleteUser = async (userId: string): Promise<boolean> => {
     return true;
   } catch (error) {
     console.error("Error deleting user profile (admin):", error);
+    return false;
+  }
+};
+
+export const saveUserGaPropertyId = async (userId: string, gaPropertyId: string): Promise<boolean> => {
+  if (!userId) return false;
+  try {
+    const userRef = doc(db, 'users', userId);
+    await updateDoc(userRef, { gaPropertyId });
+    return true;
+  } catch (error) {
+    console.error(`Error saving GA Property ID for user ${userId}:`, error);
     return false;
   }
 };

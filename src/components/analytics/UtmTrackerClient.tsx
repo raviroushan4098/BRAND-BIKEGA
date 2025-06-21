@@ -9,7 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import type { UtmLink } from '@/lib/utmLinkService';
 import { addUtmLink, getUtmLinksForUser, deleteUtmLink } from '@/lib/utmLinkService';
 import type { User } from '@/lib/authService';
-import { getAllUsers as apiGetAllUsers } from '@/lib/authService';
+import { getAllUsers as apiGetAllUsers, saveUserGaPropertyId } from '@/lib/authService';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
@@ -98,6 +98,16 @@ export default function UtmTrackerClient() {
   useEffect(() => {
     fetchLinks();
   }, [fetchLinks]);
+  
+  useEffect(() => {
+    if (user?.role === 'admin') {
+        const selectedUser = usersForAdminSelect.find(u => u.id === currentTargetUserId);
+        setGaPropertyId(selectedUser?.gaPropertyId || '');
+    } else {
+        setGaPropertyId(user?.gaPropertyId || '');
+    }
+  }, [currentTargetUserId, usersForAdminSelect, user]);
+
 
   useEffect(() => {
     const subscription = watch((values) => {
@@ -182,6 +192,27 @@ export default function UtmTrackerClient() {
         setIsAnalyticsLoading(false);
     }
   };
+  
+  const handleSaveGaPropertyId = async () => {
+    if (!currentTargetUserId) return;
+    
+    let originalId = '';
+    if (user?.role === 'admin') {
+        const selectedUser = usersForAdminSelect.find(u => u.id === currentTargetUserId);
+        originalId = selectedUser?.gaPropertyId || '';
+    } else {
+        originalId = user?.gaPropertyId || '';
+    }
+
+    if (gaPropertyId === originalId) return;
+
+    const success = await saveUserGaPropertyId(currentTargetUserId, gaPropertyId);
+    if (success) {
+        toast({ title: "Success", description: "Google Analytics Property ID saved." });
+    } else {
+        toast({ title: "Error", description: "Failed to save Property ID.", variant: "destructive" });
+    }
+  };
 
 
   return (
@@ -200,13 +231,15 @@ export default function UtmTrackerClient() {
             <Label htmlFor="gaPropertyId">Google Analytics Property ID</Label>
             <Input 
                 id="gaPropertyId" 
-                placeholder="Enter your GA4 Property ID..."
+                placeholder="Enter GA4 Property ID and click away to save"
                 value={gaPropertyId}
                 onChange={(e) => setGaPropertyId(e.target.value)}
+                onBlur={handleSaveGaPropertyId}
                 className="max-w-sm mt-1"
+                disabled={!currentTargetUserId}
             />
             <p className="text-xs text-muted-foreground mt-1">
-                Required to fetch campaign analytics. You can find this ID in your GA4 admin settings.
+                Required to fetch campaign analytics. This ID is saved per-user.
             </p>
         </CardContent>
       </Card>

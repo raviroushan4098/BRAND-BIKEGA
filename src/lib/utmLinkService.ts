@@ -27,13 +27,13 @@ export interface UtmLink {
 // Function to add a new UTM link
 export const addUtmLink = async (linkData: Omit<UtmLink, 'id' | 'createdAt'>): Promise<UtmLink | null> => {
   try {
-    const docRef = await addDoc(collection(db, 'utmLinks'), {
+    const dataToSave = {
       ...linkData,
-      createdAt: Timestamp.now().toDate().toISOString(),
-    });
-    // Re-fetch the document to get the server-generated timestamp correctly if needed, but for simplicity, we use client-side generated one
-    const newLink = { ...linkData, id: docRef.id, createdAt: new Date().toISOString() };
-    return newLink;
+      createdAt: new Date().toISOString(), // Use a consistent ISO string
+    };
+    const docRef = await addDoc(collection(db, 'utmLinks'), dataToSave);
+    // Return the exact data that was saved, plus the new ID from the doc reference
+    return { ...dataToSave, id: docRef.id };
   } catch (error) {
     console.error("Error adding UTM link: ", error);
     return null;
