@@ -53,7 +53,7 @@ const CampaignAnalyticsOutputSchema = z.object({
   engagementRate: z.number().default(0).describe("The percentage of engaged sessions (engagedSessions / sessions)."),
   conversions: z.number().default(0).describe("Total number of conversion events attributed to this campaign."),
   newUsers: z.number().default(0).describe("Number of users who interacted with the site for the first time via this campaign."),
-  aiSummary: z.string().describe("An AI-generated summary interpreting these analytics numbers."),
+  aiSummary: z.string().default("").describe("An AI-generated summary interpreting these analytics numbers."),
   error: z.string().optional(),
 });
 export type CampaignAnalyticsOutput = z.infer<typeof CampaignAnalyticsOutputSchema>;
@@ -93,7 +93,7 @@ const fetchCampaignAnalyticsFlow = ai.defineFlow(
     const credentials = await getGoogleAnalyticsCredentials();
     if (!credentials) {
       const errorMsg = "Google Analytics credentials are not configured in API Management.";
-      console.error(`[fetchCampaignAnalyticsFlow] ${errorMsg}`);
+      console.error(`[fetchGaAnalyticsFlow] ${errorMsg}`);
       return {
         ...CampaignAnalyticsOutputSchema.parse({}),
         aiSummary: 'Configuration error: Could not load Google Analytics credentials.',
