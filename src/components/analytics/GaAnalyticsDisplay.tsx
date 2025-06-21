@@ -3,7 +3,7 @@
 
 import { CampaignAnalyticsOutput } from '@/ai/flows/fetch-ga-analytics-flow';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, AlertTriangle, BarChart2, CheckCircle, Percent, Lightbulb } from 'lucide-react';
+import { Loader2, AlertTriangle, BarChart2, CheckCircle, Percent, Lightbulb, Info } from 'lucide-react';
 import { Button } from '../ui/button';
 
 interface GaAnalyticsDisplayProps {
@@ -36,7 +36,8 @@ const GaAnalyticsDisplay: React.FC<GaAnalyticsDisplayProps> = ({ analytics, isLo
     );
   }
 
-  if (error && !analytics?.aiSummary) { // Show big error only if there's no data at all
+  // This is the hard failure case. The flow crashed or a network error occurred.
+  if (error && !analytics) {
     return (
       <div className="flex flex-col items-center justify-center p-6 text-center min-h-[300px]">
         <AlertTriangle className="h-10 w-10 text-destructive mb-4" />
@@ -49,7 +50,8 @@ const GaAnalyticsDisplay: React.FC<GaAnalyticsDisplayProps> = ({ analytics, isLo
     );
   }
 
-  if (!analytics || (analytics.sessions === 0 && !analytics.error)) {
+  // This handles both a flow that didn't return anything meaningful, and the case where sessions are 0.
+  if (!analytics || analytics.sessions === 0) {
     return (
       <div className="p-6 text-center min-h-[300px] flex flex-col items-center justify-center">
         <CardTitle className="text-lg font-semibold mb-2">No Activity Found</CardTitle>
@@ -57,10 +59,14 @@ const GaAnalyticsDisplay: React.FC<GaAnalyticsDisplayProps> = ({ analytics, isLo
             No analytics data was found for the campaign "{campaignName}" in the last 90 days.
         </p>
         
-        {analytics.aiSummary && (
+        {analytics?.aiSummary && (
             <p className="mt-4 italic text-xs bg-muted p-2 rounded-md w-full">
                 AI Summary: {analytics.aiSummary}
             </p>
+        )}
+        
+        {analytics?.error && (
+             <p className="text-xs text-destructive mt-4">Note: {analytics.error}</p>
         )}
 
         <div className="mt-6 text-xs text-left text-muted-foreground border-t pt-4 w-full">
@@ -75,6 +81,7 @@ const GaAnalyticsDisplay: React.FC<GaAnalyticsDisplayProps> = ({ analytics, isLo
     );
   }
 
+  // This is the success case with data.
   return (
     <div className="space-y-4 p-2">
       <Card className="bg-muted/50">

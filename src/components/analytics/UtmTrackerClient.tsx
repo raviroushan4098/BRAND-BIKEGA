@@ -183,13 +183,10 @@ export default function UtmTrackerClient() {
 
     try {
         const result = await fetchCampaignAnalytics({ propertyId, campaignName });
-        if (result.error) {
-          setAnalyticsError(result.error);
-        } else {
-          setCurrentAnalytics(result);
-        }
+        setCurrentAnalytics(result);
     } catch (e: any) {
         setAnalyticsError(e.message || "An unexpected error occurred.");
+        setCurrentAnalytics(null);
     } finally {
         setIsAnalyticsLoading(false);
     }
