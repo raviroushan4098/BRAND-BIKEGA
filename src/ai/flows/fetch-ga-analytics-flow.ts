@@ -1,7 +1,8 @@
 
 'use server';
 /**
- * @fileOverview A Genkit flow to fetch campaign analytics from the Google Analytics Data API.
+ * @fileOverview A Genkit flow to fetch campaign analytics from the Google Analytics Data API
+ * and provide an AI-powered summary of the performance.
  *
  * - fetchCampaignAnalytics - An exported function to invoke the flow.
  * - FetchCampaignAnalyticsInput - The Zod schema for the input.
@@ -45,12 +46,14 @@ const FetchCampaignAnalyticsInputSchema = z.object({
 });
 export type FetchCampaignAnalyticsInput = z.infer<typeof FetchCampaignAnalyticsInputSchema>;
 
-// Output Schema for the flow
+// Expanded Output Schema with more metrics and AI analysis
 const CampaignAnalyticsOutputSchema = z.object({
-  totalUsers: z.number().default(0),
-  sessions: z.number().default(0),
-  conversions: z.number().default(0),
-  bounceRate: z.number().default(0),
+  sessions: z.number().default(0).describe("Total number of sessions initiated by users from this campaign."),
+  engagedSessions: z.number().default(0).describe("Number of sessions that lasted longer than 10 seconds, had a conversion event, or had 2+ pageviews."),
+  engagementRate: z.number().default(0).describe("The percentage of engaged sessions (engagedSessions / sessions)."),
+  conversions: z.number().default(0).describe("Total number of conversion events attributed to this campaign."),
+  newUsers: z.number().default(0).describe("Number of users who interacted with the site for the first time via this campaign."),
+  aiSummary: z.string().describe("An AI-generated summary interpreting these analytics numbers."),
   error: z.string().optional(),
 });
 export type CampaignAnalyticsOutput = z.infer<typeof CampaignAnalyticsOutputSchema>;
@@ -59,6 +62,24 @@ export type CampaignAnalyticsOutput = z.infer<typeof CampaignAnalyticsOutputSche
 export async function fetchCampaignAnalytics(input: FetchCampaignAnalyticsInput): Promise<CampaignAnalyticsOutput> {
   return fetchCampaignAnalyticsFlow(input);
 }
+
+// AI Prompt for analyzing the analytics data
+const analysisPrompt = ai.definePrompt({
+    name: 'gaAnalysisPrompt',
+    input: { schema: CampaignAnalyticsOutputSchema.omit({ aiSummary: true, error: true }) },
+    output: { schema: z.object({ aiSummary: CampaignAnalyticsOutputSchema.shape.aiSummary }) },
+    prompt: `You are a data analyst. Based on the following Google Analytics data for a specific campaign over the last 90 days, provide a concise, 2-3 sentence summary.
+        
+- Sessions: {{{sessions}}}
+- Engaged Sessions: {{{engagedSessions}}}
+- Engagement Rate: {{{engagementRate}}} (This is a decimal, e.g., 0.65 means 65%)
+- Conversions: {{{conversions}}}
+- New Users: {{{newUsers}}}
+    
+Your summary should interpret these numbers for a non-expert. For example, comment on whether the engagement rate is healthy (typically > 0.60 is good), if the campaign is effectively bringing in new users, and how well it is converting.
+If all numbers are zero, state that the campaign had no activity in the period.
+`,
+});
 
 const fetchCampaignAnalyticsFlow = ai.defineFlow(
   {
@@ -75,74 +96,76 @@ const fetchCampaignAnalyticsFlow = ai.defineFlow(
       console.error(`[fetchCampaignAnalyticsFlow] ${errorMsg}`);
       return {
         ...CampaignAnalyticsOutputSchema.parse({}),
+        aiSummary: 'Configuration error: Could not load Google Analytics credentials.',
         error: errorMsg,
       };
     }
 
     const analyticsDataClient = new BetaAnalyticsDataClient({ credentials });
+    
+    let analyticsData: Omit<CampaignAnalyticsOutput, 'aiSummary' | 'error'> = {
+        sessions: 0,
+        engagedSessions: 0,
+        engagementRate: 0,
+        conversions: 0,
+        newUsers: 0,
+    };
 
     try {
       const [response] = await analyticsDataClient.runReport({
         property: `properties/${propertyId}`,
-        dateRanges: [
-          {
-            startDate: '90daysAgo',
-            endDate: 'today',
-          },
-        ],
-        dimensions: [
-          {
-            name: 'campaignName',
-          },
-        ],
+        dateRanges: [{ startDate: '90daysAgo', endDate: 'today' }],
+        dimensions: [{ name: 'campaignName' }],
         metrics: [
-          { name: 'totalUsers' },
           { name: 'sessions' },
+          { name: 'engagedSessions' },
+          { name: 'engagementRate' },
           { name: 'conversions' },
-          { name: 'bounceRate' },
+          { name: 'newUsers' },
         ],
         dimensionFilter: {
           filter: {
             fieldName: 'campaignName',
-            stringFilter: {
-              value: campaignName,
-              matchType: 'EXACT',
-            },
+            stringFilter: { value: campaignName, matchType: 'EXACT' },
           },
         },
       });
 
-      console.log(`[fetchCampaignAnalyticsFlow] GA API Response received for campaign ${campaignName}. Raw response header:`, JSON.stringify(response.dimensionHeaders, null, 2));
+      console.log(`[fetchCampaignAnalyticsFlow] GA API Response received for campaign ${campaignName}.`);
 
-      if (!response.rows || response.rows.length === 0) {
-        console.log(`[fetchCampaignAnalyticsFlow] No data returned from GA for campaign: ${campaignName}. This is a valid response if there are no visits for this campaign in the selected time range.`);
-        return CampaignAnalyticsOutputSchema.parse({}); // Return default zero values
+      if (response.rows && response.rows.length > 0) {
+        console.log(`[fetchCampaignAnalyticsFlow] Raw row data:`, JSON.stringify(response.rows[0], null, 2));
+        const row = response.rows[0];
+        const getMetricValue = (index: number) => (row.metricValues?.[index]?.value ? parseFloat(row.metricValues[index].value!) : 0);
+        
+        analyticsData = {
+          sessions: getMetricValue(0),
+          engagedSessions: getMetricValue(1),
+          engagementRate: getMetricValue(2),
+          conversions: getMetricValue(3),
+          newUsers: getMetricValue(4),
+        };
+      } else {
+         console.log(`[fetchCampaignAnalyticsFlow] No data returned from GA for campaign: ${campaignName}.`);
       }
-      
-      console.log(`[fetchCampaignAnalyticsFlow] Raw row data:`, JSON.stringify(response.rows[0], null, 2));
 
-      // We expect only one row since we are filtering by a specific campaign name.
-      const row = response.rows[0];
-      const getMetricValue = (index: number) => (row.metricValues?.[index]?.value ? parseFloat(row.metricValues[index].value!) : 0);
+      // Always generate an AI summary, even for zero data
+      const { output: analysisOutput } = await analysisPrompt(analyticsData);
+      const aiSummary = analysisOutput?.aiSummary || "AI analysis could not be generated.";
       
-      // The order of metrics matches the request.
-      const analyticsData: CampaignAnalyticsOutput = {
-        totalUsers: getMetricValue(0),
-        sessions: getMetricValue(1),
-        conversions: getMetricValue(2),
-        bounceRate: getMetricValue(3),
-      };
+      console.log(`[fetchCampaignAnalyticsFlow] Parsed data for ${campaignName}:`, analyticsData);
+      console.log(`[fetchCampaignAnalyticsFlow] AI summary:`, aiSummary);
 
-      console.log(`[fetchCampaignAnalyticsFlow] Parsed analytics data for ${campaignName}:`, analyticsData);
-      return analyticsData;
+      return { ...analyticsData, aiSummary };
 
     } catch (error: any) {
       console.error(`[fetchCampaignAnalyticsFlow] Error calling Google Analytics API:`, error);
-      // Try to parse Google's specific error format
       const detail = error.errorDetails?.[0]?.errorInfo?.metadata?.detail || error.message || "An unknown error occurred.";
+      const errorMsg = `Failed to fetch from Google Analytics: ${detail}`;
       return {
         ...CampaignAnalyticsOutputSchema.parse({}),
-        error: `Failed to fetch from Google Analytics: ${detail}`,
+        aiSummary: 'API Error: Could not retrieve analytics data.',
+        error: errorMsg,
       };
     }
   }
