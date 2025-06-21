@@ -3,7 +3,7 @@
 
 import { CampaignAnalyticsOutput } from '@/ai/flows/fetch-ga-analytics-flow';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, AlertTriangle, Users, BarChart2, CheckCircle, Percent, Lightbulb, TrendingUp } from 'lucide-react';
+import { Loader2, AlertTriangle, BarChart2, CheckCircle, Percent, Lightbulb } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 interface GaAnalyticsDisplayProps {
@@ -84,7 +84,6 @@ const GaAnalyticsDisplay: React.FC<GaAnalyticsDisplayProps> = ({ analytics, isLo
         <StatCard title="Sessions" value={analytics.sessions.toLocaleString()} icon={BarChart2} />
         <StatCard title="Engagement Rate" value={`${(analytics.engagementRate * 100).toFixed(1)}%`} icon={Percent} />
         <StatCard title="Conversions" value={analytics.conversions.toLocaleString()} icon={CheckCircle} />
-        <StatCard title="New Users" value={analytics.newUsers.toLocaleString()} icon={TrendingUp} />
       </div>
       <p className="text-xs text-muted-foreground text-center pt-2">Data from the last 90 days.</p>
     </div>

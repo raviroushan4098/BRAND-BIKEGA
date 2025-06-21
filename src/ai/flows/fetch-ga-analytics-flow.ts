@@ -52,7 +52,6 @@ const CampaignAnalyticsOutputSchema = z.object({
   engagedSessions: z.number().default(0).describe("Number of sessions that lasted longer than 10 seconds, had a conversion event, or had 2+ pageviews."),
   engagementRate: z.number().default(0).describe("The percentage of engaged sessions (engagedSessions / sessions)."),
   conversions: z.number().default(0).describe("Total number of conversion events attributed to this campaign."),
-  newUsers: z.number().default(0).describe("Number of users who interacted with the site for the first time via this campaign."),
   aiSummary: z.string().default("").describe("An AI-generated summary interpreting these analytics numbers."),
   error: z.string().optional(),
 });
@@ -74,9 +73,8 @@ const analysisPrompt = ai.definePrompt({
 - Engaged Sessions: {{{engagedSessions}}}
 - Engagement Rate: {{{engagementRate}}} (This is a decimal, e.g., 0.65 means 65%)
 - Conversions: {{{conversions}}}
-- New Users: {{{newUsers}}}
     
-Your summary should interpret these numbers for a non-expert. For example, comment on whether the engagement rate is healthy (typically > 0.60 is good), if the campaign is effectively bringing in new users, and how well it is converting.
+Your summary should interpret these numbers for a non-expert. For example, comment on whether the engagement rate is healthy (typically > 0.60 is good) and how well the campaign is converting based on the session and conversion numbers.
 If all numbers are zero, state that the campaign had no activity in the period.
 `,
 });
@@ -108,7 +106,6 @@ const fetchCampaignAnalyticsFlow = ai.defineFlow(
         engagedSessions: 0,
         engagementRate: 0,
         conversions: 0,
-        newUsers: 0,
     };
 
     try {
@@ -121,7 +118,6 @@ const fetchCampaignAnalyticsFlow = ai.defineFlow(
           { name: 'engagedSessions' },
           { name: 'engagementRate' },
           { name: 'conversions' },
-          { name: 'newUsers' },
         ],
         dimensionFilter: {
           filter: {
@@ -143,7 +139,6 @@ const fetchCampaignAnalyticsFlow = ai.defineFlow(
           engagedSessions: getMetricValue(1),
           engagementRate: getMetricValue(2),
           conversions: getMetricValue(3),
-          newUsers: getMetricValue(4),
         };
       } else {
          console.log(`[fetchCampaignAnalyticsFlow] No data returned from GA for campaign: ${campaignName}.`);
