@@ -1,4 +1,3 @@
-
 "use client";
 
 import Link from 'next/link';
@@ -22,7 +21,8 @@ import {
   Settings,
   HelpCircle,
   KeyRound,
-  BarChart3, // Added for Overall Analytics
+  BarChart3,
+  Link2, // For UTM tracker
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -32,10 +32,11 @@ const SidebarNav = () => {
 
   const navItems = [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { href: '/analytics', label: 'Overall Analytics', icon: BarChart3 }, // New Item
+    { href: '/analytics', label: 'Overall Analytics', icon: BarChart3 },
     { href: '/youtube', label: 'YouTube Management', icon: Youtube },
     { href: '/instagram', label: 'Instagram Analytics', icon: Instagram },
     { href: '/suggestions', label: 'AI Suggestions', icon: Lightbulb },
+    { href: '/utm-tracker', label: 'UTM Tracker', icon: Link2 },
   ];
 
   const adminNavItems = [
@@ -91,4 +92,3 @@ const SidebarNav = () => {
 };
 
 export default SidebarNav;
-
