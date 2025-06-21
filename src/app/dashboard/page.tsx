@@ -51,7 +51,7 @@ export default function DashboardPage() {
             icon={<BarChart3 className="h-8 w-8 text-primary" />}
             title="Track Performance"
             description="Monitor key metrics for your YouTube and Instagram channels. Understand what resonates with your audience."
-            link="/youtube"
+            link="/analytics"
             linkLabel="View Analytics"
           />
           <FeatureCard
@@ -130,4 +130,3 @@ const QuickLinkButton = ({ href, icon, label }: QuickLinkButtonProps) => (
     </Link>
   </Button>
 );
-

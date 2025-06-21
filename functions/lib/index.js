@@ -286,7 +286,7 @@ async function saveInstagramPostAnalytics(userId, postData) {
 exports.dailyDataRefresh = functions
     .runWith({ timeoutSeconds: 540, memory: "1GB" })
     .pubsub.schedule("every day 03:00")
-    .timeZone("America/Los_Angeles")
+    .timeZone("Asia/Kolkata")
     .onRun(async (context) => {
     console.log("Daily data refresh job started!");
     const apiKeys = await getApiKeys();
