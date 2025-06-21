@@ -315,7 +315,7 @@ async function saveInstagramPostAnalytics(userId: string, postData: Partial<Stor
 export const dailyDataRefresh = functions
     .runWith({timeoutSeconds: 540, memory: "1GB"})
     .pubsub.schedule("every day 03:00")
-    .timeZone("America/Los_Angeles")
+    .timeZone("Asia/Kolkata")
     .onRun(async (context: functions.EventContext) => {
         console.log("Daily data refresh job started!");
 
