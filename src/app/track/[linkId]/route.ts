@@ -26,12 +26,7 @@ async function getMeasurementProtocolApiSecret(): Promise<string | null> {
 }
 
 async function sendAnalyticsEvent(linkData: RedirectLink, apiSecret: string) {
-  // A unique ID for the client. This should be persisted for a user across sessions if possible.
-  // For this server-side context where we can't use cookies, we generate a new one.
   const clientId = crypto.randomUUID();
-  
-  // A unique ID for the session. This is required for session attribution.
-  // We use a simple timestamp-based ID.
   const sessionId = `${Math.floor(Date.now() / 1000)}`;
 
   const eventPayload = {
@@ -39,13 +34,12 @@ async function sendAnalyticsEvent(linkData: RedirectLink, apiSecret: string) {
     events: [{
       name: 'session_start',
       params: {
-        session_id: sessionId, // CRUCIAL for attribution
-        campaign_source: linkData.utmSource,
-        campaign_medium: linkData.utmMedium,
-        campaign_name: linkData.utmCampaign,
-        // page_location is helpful for context
+        session_id: sessionId,
+        source: linkData.utmSource,      // CORRECT: 'source'
+        medium: linkData.utmMedium,      // CORRECT: 'medium'
+        campaign: linkData.utmCampaign,  // CORRECT: 'campaign'
         page_location: linkData.destinationUrl,
-        engagement_time_msec: '1', // A minimal non-zero engagement time
+        engagement_time_msec: '1',
       },
     }],
   };
@@ -90,7 +84,6 @@ export async function GET(
       console.log(`[Redirect Service] Found destination URL: ${linkData.destinationUrl}`);
       const apiSecret = await getMeasurementProtocolApiSecret();
       if (apiSecret) {
-        // We now wait for the tracking event to be sent before redirecting.
         await sendAnalyticsEvent(linkData, apiSecret);
       } else {
         console.warn("[Redirect Service] No API Secret for Measurement Protocol found. Skipping server-side tracking.");
