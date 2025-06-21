@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertTriangle } from 'lucide-react';
 
@@ -91,8 +91,11 @@ const ApiKeyForm: React.FC<ApiKeyFormProps> = ({ isOpen, onOpenChange, onSubmitA
                 <FormItem>
                   <FormLabel>Service Name</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g., youtube, RapidAPI-Instagram-Scraper, google-analytics" {...field} />
+                    <Input placeholder="e.g., youtube, google-analytics-mp" {...field} />
                   </FormControl>
+                  <FormDescription>
+                    Use 'google-analytics-mp' for the Measurement Protocol API Secret.
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -105,7 +108,7 @@ const ApiKeyForm: React.FC<ApiKeyFormProps> = ({ isOpen, onOpenChange, onSubmitA
                   <FormLabel>API Key Value / JSON Credentials</FormLabel>
                   <FormControl>
                     <Textarea
-                      placeholder="For simple keys, enter the key value. For Google Analytics, paste the entire service account JSON object here."
+                      placeholder="For 'google-analytics', paste the entire service account JSON. For 'google-analytics-mp', paste the API Secret value."
                       className="min-h-[120px] font-mono text-xs"
                       {...field}
                     />
@@ -121,7 +124,7 @@ const ApiKeyForm: React.FC<ApiKeyFormProps> = ({ isOpen, onOpenChange, onSubmitA
                 <FormItem>
                   <FormLabel>Description (Optional)</FormLabel>
                   <FormControl>
-                    <Textarea placeholder="e.g., Used for content generation feature" {...field} />
+                    <Textarea placeholder="e.g., Used for server-side UTM tracking" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

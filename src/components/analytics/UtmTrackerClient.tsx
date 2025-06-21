@@ -205,7 +205,7 @@ export default function UtmTrackerClient() {
             <CardTitle className="text-3xl font-bold">UTM Link Tracker</CardTitle>
           </div>
           <CardDescription>
-            Create short, trackable redirect links. Campaign analytics are fetched using a pre-configured Google Analytics Property ID.
+            Create short, trackable redirect links. Clicks are tracked reliably on the server using the Google Analytics Measurement Protocol.
           </CardDescription>
         </CardHeader>
       </Card>
